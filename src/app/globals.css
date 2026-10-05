@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/*
+ * Thème dark uniquement, et c'est volontaire : l'app est utilisée sur un téléphone
+ * posé sur la table de marque en gymnase, souvent en lumière rasante. Le dark natif
+ * évite l'éblouissement et les contrastes sont calibrés pour cet usage.
+ *
+ * Pas de police Google : on utilise la pile système pour ne dépendre d'aucun
+ * téléchargement réseau au premier lancement (crucial pour une PWA hors-ligne).
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --surface-base: #0b0f14;
+  --surface-raised: #151b23;
+  --surface-overlay: #1e2632;
+  --surface-sunken: #070a0e;
+
+  /* Texte */
+  --text-primary: #f2f5f9;
+  --text-secondary: #a9b4c4;
+  --text-muted: #6b7688;
+  --text-inverse: #0b0f14;
+
+  /* Accent */
+  --accent: #3d8bfd;
+  --accent-hover: #5a9dff;
+  --accent-subtle: #16243d;
+
+  /* Sémantique — le vert/m rouge sont le vocabulaire de la saisie */
+  --made: #22c55e;
+  --made-subtle: #10291c;
+  --missed: #64748b;
+  --missed-subtle: #1b212b;
+  --foul: #ef4444;
+  --foul-subtle: #2b1414;
+  --warning: #f59e0b;
+  --warning-subtle: #2b1f08;
+
+  /* Bordures */
+  --border: #232c38;
+  --border-strong: #33404f;
+
+  /* Cible tactile minimale : 44px (recommandation Material) */
+  --tap-target-min: 44px;
+  /* Cible des actions principales de saisie : 88px */
+  --tap-target-action: 88px;
+
+  /* Encoches et barres système. `env()` vaut 0px sur les navigateurs desktop. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+@theme inline {
+  --color-base: var(--surface-base);
+  --color-raised: var(--surface-raised);
+  --color-overlay: var(--surface-overlay);
+  --color-sunken: var(--surface-sunken);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-made: var(--made);
+  --color-made-subtle: var(--made-subtle);
+  --color-missed: var(--missed);
+  --color-missed-subtle: var(--missed-subtle);
+  --color-foul: var(--foul);
+  --color-foul-subtle: var(--foul-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+
+  --spacing-tap-min: var(--tap-target-min);
+  --spacing-tap-action: var(--tap-target-action);
+
+  --padding-safe-t: var(--safe-top);
+  --padding-safe-r: var(--safe-right);
+  --padding-safe-b: var(--safe-bottom);
+  --padding-safe-l: var(--safe-left);
+
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html {
+  background-color: var(--surface-base);
+  /*
+   * `dvh` plutôt que `vh` : sur mobile, `vh` ignore la barre d'URL et déborde.
+   * Indispensable pour un écran de saisie qui ne doit jamais pouvoir défiler.
+   */
+  height: 100%;
+  /* Empêche l'agrandissement automatique du texte en rotation sur iOS. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  height: 100%;
+  background-color: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  /* L'app se pilote à une main : on neutralise la sélection accidentelle du texte. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Aucun rebond ni zoom sur les actions de saisie. */
+  overscroll-behavior: none;
+}
+
+/*
+ * Accessibilité : retirer les contours au clic n'est acceptable que si un indicateur
+ * équivalent reste visible au clavier. On ne les supprime donc pas globalement.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Zones tactiles scrollables (carrousel joueurs, bandeau de combos). */
+@utility scroll-x-touch {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility surface-card {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
