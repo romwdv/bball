@@ -75,6 +75,12 @@ export interface NewMatch {
   opponentName: string;
   date: string;
   status?: MatchStatus;
+  /**
+   * Roster du match. Par défaut **tout** le roster de l'équipe : c'est le cas
+   * habituel (une équipe locale dispute avec ses joueurs habituels) et ça évite
+   * au coach de cocher douze cases à chaque match.
+   */
+  playerIds?: readonly string[];
 }
 
 export interface MatchRepository {
@@ -88,6 +94,22 @@ export interface MatchRepository {
   latestUnfinished(teamId: string): Promise<MatchRow | undefined>;
   setStatus(id: string, status: MatchStatus): Promise<MatchRow>;
   update(id: string, patch: Partial<NewMatch>): Promise<MatchRow>;
+  /**
+   * Remplace le roster du match.
+   *
+   * Séparé de `update` parce que le cas d'usage est distinct : ajouter un joueur
+   * en cours de match quand quelqu'un arrive en retard, ou corriger une omission
+   * à la reprise. Les deux font une écriture atomique du tableau.
+   */
+  setRoster(id: string, playerIds: readonly string[]): Promise<MatchRow>;
+  /**
+   * Joueurs du match, dans l'ordre du roster (numéro puis nom).
+   *
+   * L'ordre du roster d'équipe est conservé : c'est lui que le coach connaît, et
+   * surtout les joueurs **absents** du match disparaissent de la liste au lieu
+   * d'être cochés.
+   */
+  rosterOf(id: string): Promise<PlayerRow[]>;
 }
 
 export interface AppendResult {
@@ -405,11 +427,17 @@ class DexieMatchRepository implements MatchRepository {
 
   async create(teamId: string, match: NewMatch): Promise<MatchRow> {
     const now = Date.now();
+    const playerIds =
+      match.playerIds ??
+      (
+        await this.database.players.where("teamId").equals(teamId).toArray()
+      ).map((player) => player.id);
     const row: MatchRow = {
       id: newId(),
       teamId,
       opponentName: match.opponentName.trim(),
       date: match.date,
+      playerIds: [...playerIds],
       status: match.status ?? "draft",
       createdAt: now,
       finishedAt: null,
@@ -478,8 +506,28 @@ class DexieMatchRepository implements MatchRepository {
       }
       if (patch.date !== undefined) next.date = patch.date;
       if (patch.status !== undefined) next.status = patch.status;
+      if (patch.playerIds !== undefined) next.playerIds = [...patch.playerIds];
       return next;
     });
+  }
+
+  async setRoster(id: string, playerIds: readonly string[]): Promise<MatchRow> {
+    return this.write(id, (row) => ({ ...row, playerIds: [...playerIds] }));
+  }
+
+  async rosterOf(id: string): Promise<PlayerRow[]> {
+    const match = await this.database.matches.get(id);
+    if (match === undefined) return [];
+
+    // Le roster est filtré par `playerIds` puis réordonné par `comparePlayers` :
+    // l'ordre de saisie du tableau est celui du clic, pas celui du numéro de
+    // maillot, et le carrousel s'attend à l'ordre des joueurs de l'équipe.
+    const wanted = new Set(match.playerIds);
+    const all = await this.database.players
+      .where("teamId")
+      .equals(match.teamId)
+      .toArray();
+    return all.filter((player) => wanted.has(player.id)).sort(comparePlayers);
   }
 
   private async write(

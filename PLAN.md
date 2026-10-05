@@ -18,33 +18,33 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 
 ## 1. Décisions produit validées
 
-| Sujet | Décision |
-|---|---|
-| Cible | PWA mobile-first, installable iOS + Android |
-| Format | 5x5, 4 périodes de 8 min, 5 fautes éliminatoire |
-| Chrono de jeu | **Non implémenté** — seule la sélection de période compte (stats par quart temps) |
-| Saisie | Joueur verrouillé + tap = réussi, appui long 400 ms = manqué |
-| Périmètre | Mes joueurs uniquement — **pas** de score adverse, pas de stats adverses |
-| Fautes | Compteur simple (5 pastilles). Pas d'élimination, pas de LF suggérés, pas de bonus |
-| Effectif | Une seule équipe, roster persistant enrichi match après match |
-| Écrans | Match en cours, historique des matchs, stats cumulées. **Pas** d'écran scoreboard public |
-| Hors-ligne | Garanti. Build 100 % statique, source de vérité en IndexedDB |
-| Compte | **Obligatoire.** Email + mot de passe Supabase, confirmation d'email désactivée |
-| Hébergement | VPS Coolify, déploiement push depuis GitHub |
+| Sujet         | Décision                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| Cible         | PWA mobile-first, installable iOS + Android                                              |
+| Format        | 5x5, 4 périodes de 8 min, 5 fautes éliminatoire                                          |
+| Chrono de jeu | **Non implémenté** — seule la sélection de période compte (stats par quart temps)        |
+| Saisie        | Joueur verrouillé + tap = réussi, appui long 400 ms = manqué                             |
+| Périmètre     | Mes joueurs uniquement — **pas** de score adverse, pas de stats adverses                 |
+| Fautes        | Compteur simple (5 pastilles). Pas d'élimination, pas de LF suggérés, pas de bonus       |
+| Effectif      | Une seule équipe, roster persistant enrichi match après match                            |
+| Écrans        | Match en cours, historique des matchs, stats cumulées. **Pas** d'écran scoreboard public |
+| Hors-ligne    | Garanti. Build 100 % statique, source de vérité en IndexedDB                             |
+| Compte        | **Obligatoire.** Email + mot de passe Supabase, confirmation d'email désactivée          |
+| Hébergement   | VPS Coolify, déploiement push depuis GitHub                                              |
 
 ### Règles métier à respecter
 
 **Comptage des tirs** (implémenté dans `src/domain/rules.ts`, fonction unique et documentée) :
 
-| Situation | FGA | FGM | Points | Fautes | FTA |
-|---|---|---|---|---|---|
-| Tir 2 ou 3 pts réussi | +1 | +1 | +2 / +3 | — | — |
-| Tir 2 ou 3 pts raté | +1 | — | — | — | — |
-| Tir réussi + faute sifflée (and-1) | +1 | +1 | +2 / +3 | +1 | +1 |
-| Tir **raté** + faute sifflée | — | — | — | +1 | +2, ou **+3** si tentative à 3 pts |
-| Lancer réussi | — | — | +1 | — | +1 |
-| Lancer raté | — | — | — | — | +1 |
-| Faute simple | — | — | — | +1 | — |
+| Situation                          | FGA | FGM | Points  | Fautes | FTA                                |
+| ---------------------------------- | --- | --- | ------- | ------ | ---------------------------------- |
+| Tir 2 ou 3 pts réussi              | +1  | +1  | +2 / +3 | —      | —                                  |
+| Tir 2 ou 3 pts raté                | +1  | —   | —       | —      | —                                  |
+| Tir réussi + faute sifflée (and-1) | +1  | +1  | +2 / +3 | +1     | +1                                 |
+| Tir **raté** + faute sifflée       | —   | —   | —       | +1     | +2, ou **+3** si tentative à 3 pts |
+| Lancer réussi                      | —   | —   | +1      | —      | +1                                 |
+| Lancer raté                        | —   | —   | —       | —      | +1                                 |
+| Faute simple                       | —   | —   | —       | +1     | —                                  |
 
 > **À confirmer par le commanditaire** : la ligne « Tir raté + faute » est **non-FIBA**. En règle FIBA
 > officielle, ce tir compte comme une tentative ratée (FGA +1). Ici il n'est volontairement pas
@@ -61,27 +61,27 @@ partagent le même code de calcul.
 
 ### Versions vérifiées (npm, octobre 2026)
 
-| Paquet | Version |
-|---|---|
-| next | 16.3.8 |
-| react | 19.3.0 |
-| tailwindcss | 4.3.3 |
-| dexie | 4.4.6 |
-| zustand | 5.0.15 |
+| Paquet                | Version |
+| --------------------- | ------- |
+| next                  | 16.3.8  |
+| react                 | 19.3.0  |
+| tailwindcss           | 4.3.3   |
+| dexie                 | 4.4.6   |
+| zustand               | 5.0.15  |
 | @tanstack/react-query | 5.104.1 |
 | @supabase/supabase-js | 2.117.2 |
-| zod | 4.6.5 |
-| vitest | 5.0.3 |
-| @playwright/test | 1.63.0 |
+| zod                   | 4.6.5   |
+| vitest                | 5.0.3   |
+| @playwright/test      | 1.63.0  |
 
 ### Contraintes techniques ayant dicté l'architecture
 
-| Fait vérifié | Conséquence retenue |
-|---|---|
-| Next 16 utilise **Turbopack par défaut** | Le plugin PWA historique `@ducanh2912/next-pwa` est inutilisable |
-| `output: 'export'` **interdit** les routes dynamiques sans `generateStaticParams` | Pas de `/match/[id]`. Routes fixes + query param : `/match?m=<uuid>` |
-| `output: 'export'` **interdit** les Route Handlers dynamiques | Le mode Turbopack de Serwist (qui repose sur `app/serwist/[path]/route.ts`) est exclu |
-| `@serwist/next` v9.5.13 (mode webpack) fonctionne | Imposerait `next build --webpack`. Non retenu, voir ci-dessous |
+| Fait vérifié                                                                      | Conséquence retenue                                                                   |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Next 16 utilise **Turbopack par défaut**                                          | Le plugin PWA historique `@ducanh2912/next-pwa` est inutilisable                      |
+| `output: 'export'` **interdit** les routes dynamiques sans `generateStaticParams` | Pas de `/match/[id]`. Routes fixes + query param : `/match?m=<uuid>`                  |
+| `output: 'export'` **interdit** les Route Handlers dynamiques                     | Le mode Turbopack de Serwist (qui repose sur `app/serwist/[path]/route.ts`) est exclu |
+| `@serwist/next` v9.5.13 (mode webpack) fonctionne                                 | Imposerait `next build --webpack`. Non retenu, voir ci-dessous                        |
 
 ### Décision PWA : service worker écrit à la main
 
@@ -142,31 +142,39 @@ client**, et sont **soft-deleted** (`voidedAt`) — jamais supprimés.
 
 ```ts
 type Action = {
-  id: string          // uuid client — sert aussi de clé de dédupe à la sync
-  matchId: string
-  playerId: string
-  seq: number         // monotonique, ordre chronologique
-  quarter: 1 | 2 | 3 | 4
-  kind: 'shot' | 'foul' | 'free_throw' | 'rebound' | 'assist'
-      | 'turnover' | 'steal' | 'block' | 'substitution'
-  value?: 2 | 3      // points visés (shot)
-  made?: boolean     // shot / free_throw
-  fouled?: boolean   // le tir a donné lieu à une faute sifflée
-  groupId?: string   // lie les événements d'un même combo (undo groupé)
-  voidedAt?: number | null
-}
+  id: string; // uuid client — sert aussi de clé de dédupe à la sync
+  matchId: string;
+  playerId: string;
+  seq: number; // monotonique, ordre chronologique
+  quarter: 1 | 2 | 3 | 4;
+  kind:
+    | "shot"
+    | "foul"
+    | "free_throw"
+    | "rebound"
+    | "assist"
+    | "turnover"
+    | "steal"
+    | "block"
+    | "substitution";
+  value?: 2 | 3; // points visés (shot)
+  made?: boolean; // shot / free_throw
+  fouled?: boolean; // le tir a donné lieu à une faute sifflée
+  groupId?: string; // lie les événements d'un même combo (undo groupé)
+  voidedAt?: number | null;
+};
 ```
 
 ### Tables
 
-| Table | Champs clés | Index |
-|---|---|---|
-| `teams` | `id`, `name`, `ownerId`, `updatedAt` | `ownerId`, `updatedAt` |
-| `players` | `id`, `teamId`, `firstName`, `lastName`, `number`, `updatedAt` | `teamId`, `[teamId+number]`, `updatedAt` |
-| `matches` | `id`, `teamId`, `opponentName`, `date`, `status: draft\|live\|finished`, `createdAt`, `finishedAt`, `updatedAt` | `teamId`, `status`, `date`, `updatedAt` |
-| `actions` | voir ci-dessus + `updatedAt` | `[matchId+seq]`, `[matchId+quarter]`, `playerId`, `groupId`, `voidedAt`, `updatedAt` |
-| `syncState` | `key`, `lastPulledAt`, `updatedAt` | `updatedAt` |
-| `outbox` | `id` (= `entity:entityId`), `entity`, `entityId`, `payload`, `createdAt`, `attempts`, `lastError` | `[entity+entityId]`, `createdAt` |
+| Table       | Champs clés                                                                                                                                        | Index                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `teams`     | `id`, `name`, `ownerId`, `updatedAt`                                                                                                               | `ownerId`, `updatedAt`                                                               |
+| `players`   | `id`, `teamId`, `firstName`, `lastName`, `number`, `updatedAt`                                                                                     | `teamId`, `[teamId+number]`, `updatedAt`                                             |
+| `matches`   | `id`, `teamId`, `opponentName`, `date`, **`playerIds`** (roster du match), `status: draft\|live\|finished`, `createdAt`, `finishedAt`, `updatedAt` | `teamId`, `status`, `date`, `updatedAt`                                              |
+| `actions`   | voir ci-dessus + `updatedAt`                                                                                                                       | `[matchId+seq]`, `[matchId+quarter]`, `playerId`, `groupId`, `voidedAt`, `updatedAt` |
+| `syncState` | `key`, `lastPulledAt`, `updatedAt`                                                                                                                 | `updatedAt`                                                                          |
+| `outbox`    | `id` (= `entity:entityId`), `entity`, `entityId`, `payload`, `createdAt`, `attempts`, `lastError`                                                  | `[entity+entityId]`, `createdAt`                                                     |
 
 `updatedAt` est une colonne de persistence, pas du domaine : les lignes stockées sont
 `Player & { updatedAt: number }`, et `toPlayer()` la retire avant de remettre l'objet au
@@ -222,11 +230,11 @@ et **aucun email n'est envoyé**. On supprime entièrement la dépendance email 
 ```ts
 createClient(url, publishableKey, {
   auth: {
-    persistSession: true,      // localStorage → survit au redémarrage et au mode avion
-    autoRefreshToken: true,    // refresh silencieux en tâche de fond
-    detectSessionInUrl: true,  // requis pour le lien de reset de mot de passe
+    persistSession: true, // localStorage → survit au redémarrage et au mode avion
+    autoRefreshToken: true, // refresh silencieux en tâche de fond
+    detectSessionInUrl: true, // requis pour le lien de reset de mot de passe
   },
-})
+});
 ```
 
 Trois écrans sur `/` : connexion · inscription · mot de passe oublié. Le lien de reset revient
@@ -242,12 +250,12 @@ Supabase, la sécurité repose sur les RLS. **Aucune** `service_role` key dans l
 
 ### Configuration dashboard Supabase (une seule fois)
 
-| Où | Quoi |
-|---|---|
-| Authentication → Sign In / Email | **Cocher "Confirm email" → OFF** (point critique) |
+| Où                                 | Quoi                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| Authentication → Sign In / Email   | **Cocher "Confirm email" → OFF** (point critique)                        |
 | Authentication → URL Configuration | Site URL = domaine de prod ; `Redirect URLs` = `https://domaine/` et `/` |
-| Authentication → Sessions | `Session time limit` 30 jours, refresh token rotation ON |
-| Auth → Providers | Email activé (par défaut) |
+| Authentication → Sessions          | `Session time limit` 30 jours, refresh token rotation ON                 |
+| Auth → Providers                   | Email activé (par défaut)                                                |
 
 Aucune clé Google Cloud. Aucun SMTP. Si l'oubli de mot de passe doit fonctionner réellement,
 brancher un SMTP (Brevo / Resend / SMTP2GO) — l'écran est prévu mais le bouton échouera
@@ -355,7 +363,7 @@ Vérification : `pnpm verify` au vert · **115 tests** · couverture `src/domain
 #### Trois décisions prises en cours de route
 
 **1. Les FTA ne sont comptés que par les actions `free_throw`.**
-Une première version faisait `+2 FTA` sur le tir fouillé, *plus* `+1` par lancer saisi :
+Une première version faisait `+2 FTA` sur le tir fouillé, _plus_ `+1` par lancer saisi :
 2 FTA became 4 pour une série de 2. Corrigé : un tir fouillé ne produit que `+1 faute`, et
 `awardedFreeThrows()` indique combien de lancers sont dus. C'est aussi plus honnête : un
 joueur qui n'a pas eu l'occasion de tirer ses 2 lancers n'a pas « tenté » 2 lancers.
@@ -452,7 +460,7 @@ l'upsert en une opération.
   `actions.update` n'existe pas, par construction.
 - **`voidMany()` relit les lignes dans la transaction** avant d'écrire `voidedAt` : l'annulation
   passe par la clé primaire, pas par la copie que l'appelant détenait. `undoLast()` ne fait
-  que demander au domaine (`undoScope()`) *quel* est le périmètre, puis délègue l'écriture.
+  que demander au domaine (`undoScope()`) _quel_ est le périmètre, puis délègue l'écriture.
 - **Validation Zod avant écriture** : une ligne invalide est rejetée **avant** d'atteindre
   IndexedDB. Écrire d'abord et valider ensuite laisserait un match corrompu en base, visible
   seulement à la première lecture des statistiques. Un test vérifie qu'un combo dont le
@@ -471,32 +479,121 @@ l'upsert en une opération.
 
 ### Phase 3 — Prototype tactile · PORTE DE VALIDATION
 
-**Durée** : ~1 à 1,5 jour · **Statut** : ⬜ À faire — **prochaine étape**
+**Durée** : ~1 à 1,5 jour · **Statut** : 🟡 Code terminé, **en attente du test terrain**
 
 Objectif : la saisie en temps réel, testable sur un vrai téléphone. **On s'arrête ici pour ton
 retour ergonomique avant d'écrire la moindre ligne de stats.**
 
-Ce qui est déjà disponible côté données : `append()` écrit un combo entier et attribue `seq`
+Ce qui était déjà disponible côté données : `append()` écrit un combo entier et attribue `seq`
 et `id`, `undoLast()` et `voidGroup()` gèrent l'annulation, `listByMatch()` rend le fil
-ordonné. La phase 3 n'a donc plus à se soucier de la persistance.
+ordonné. La phase 3 n'a donc pas eu à se soucier de la persistance.
 
 Tâches :
 
-- [ ] Zustand : store de match (`playerId` verrouillé, `quarter`, sheet ouverte)
-- [ ] Écran `/` — liste des matchs en cours + « Nouveau match »
-- [ ] Écran `/new-match` — date, adversaire, sélection des joueurs depuis le roster (création rapide
+- [x] Zustand : store de match (`playerId` verrouillé, `quarter`, sheet ouverte)
+- [x] Écran `/` — liste des matchs en cours + « Nouveau match »
+- [x] Écran `/new-match` — date, adversaire, sélection des joueurs depuis le roster (création rapide
       d'un joueur si absent : numéro + nom)
-- [ ] Écran `/match?m=<uuid>` selon le layout §4
-- [ ] Carrousel joueurs : numéro, nom, points live, pastilles de fautes, état verrouillé
-- [ ] Grille d'actions : tap vs appui long 400 ms, haptique
-- [ ] Bandeau de combos : `2P+F`, `3P+F`, `R+F+2LF`, `R+F+3LF`
-- [ ] Mini-sheet de saisie des LF (2 ou 3 lancers, compteurs, boutons ✓ / ✗)
-- [ ] Undo groupé + toast 4 s
-- [ ] Sélecteur de période (Q1–Q4) + score dans le header
-- [ ] Wake Lock + `visualViewport` (clavier qui ne casse pas le layout)
+- [x] Écran `/match?m=<uuid>` selon le layout §4
+- [x] Carrousel joueurs : numéro, nom, points live, pastilles de fautes, état verrouillé
+- [x] Grille d'actions : tap vs appui long 400 ms, haptique
+- [x] Bandeau de combos : `2P+F`, `3P+F`, `R+F+2LF`, `R+F+3LF`
+- [x] Mini-sheet de saisie des LF (2 ou 3 lancers, compteurs, boutons ✓ / ✗)
+- [x] Undo groupé + toast 4 s
+- [x] Sélecteur de période (Q1–Q4) + score dans le header
+- [x] Wake Lock
+- [ ] `visualViewport` (clavier qui ne casse pas le layout) — **non fait, à voir sur téléphone**
+- [ ] Recalage du carrousel sur le joueur verrouillé au changement de période
+- [ ] Indicateur de sync réel dans le header (le `⚡` est un placeholder, la phase 6 le branchera)
 
 **PORTE** : tu installes l'app sur ton téléphone, tu simules un match complet, tu me fais un
 retour sur l'ergonomie. **Rien n'est écrit dans les phases suivantes avant ton feu vert.**
+
+#### Décisions prises en cours de route
+
+**1. `playerIds` ajouté au modèle `Match`, avec migration v2 → v3.**
+C'était un manque du modèle, pas de l'écran : sans roster par match, un joueur arrivé en cours
+de saison apparaît dans la feuille de match des matchs où il n'a pas joué, avec des zéros. Un
+tableau plutôt qu'une table de jointure — relation 1-n sans attribut propre, et une jointure
+coûterait une lecture de plus à chaque affichage pour n'apporter rien. Les matchs anciens
+reçoivent `playerIds: []` et non le roster actuel : attribuer les joueurs d'aujourd'hui à un
+match d'il y a trois mois donnerait l'illusion qu'ils y ont joué.
+
+**2. La période n'existe que dans le store, jamais en prop.**
+Le sélecteur Q1–Q4 et l'écriture en base partageaient deux sources (store d'un côté, prop de
+l'autre). Elles ont divergé pendant une heure de développement : le test enregistrait un tir en
+Q1 pendant que le composant affichait Q2. Le store est l'unique source ; `ActionGrid` et
+`CombosBar` lisent `useMatchStore(state => state.quarter)`.
+
+**3. `combos.*` ne sont plus utilisés par la grille d'actions.**
+Ils exigent un `groupId` non vide, or un geste simple n'a pas de groupe : le store en crée un à
+chaque écriture. Les drafts sont donc construits littéralement dans les composants, sans
+`groupId`. Un `groupId: ""` avait été essayé et rejetait la validation Zod — un garde-fou qui a
+fonctionné comme prévu.
+
+**4. Le toast n'expose pas encore « Réfaire ».**
+Le rendre fonctionnel demanderait de conserver le périmètre exact de l'annulation en mémoire
+pendant 4 secondes, alors que la source de vérité est la base. Le bouton d'annuler du header
+reste le chemin de correction. Candidat pour la phase 4, une fois le score lisible.
+
+**5. Les tirs affichés en `réussis/tentés` dans le carrousel.**
+Un tir raté ne changeait **rien** de ce qui était affiché : ni le score, ni les points du
+joueur, ni les pastilles de fautes. Le seul compteur modifié était `fga`, absent de l'UI — le
+coach ne pouvait pas savoir si son appui long était passé. Le ratio `2/5` rend le raté visible
+et persistant, et la bannière d'acquittement le confirme à l'instant.
+
+**6. Bouton FAUTE bloqué à 5 fautes — décision du commanditaire, écart au plan.**
+Le plan §1 disait « compteur simple, pas d'élimination ». Le commanditaire a demandé que le
+bouton se bloque à 5 ; c'est fait, avec le compteur affiché en permanence et un libellé qui
+explique pourquoi le bouton est mort. Les autres cibles restent actives : un joueur sorti peut
+encore tirer.
+
+**7. `awardedFreeThrows()` accorde 1 lancer après un and-1.**
+Une première version ne renvoyait quelque chose que pour un tir **raté** : le bouton `2P+F`
+n'ouvrait aucune fiche et `pendingFreeThrows()` ne signalait jamais le lancer dû. Le domaine
+applique désormais la règle FIBA — 1 lancer après un panier, 2 ou 3 après un tir raté selon sa
+valeur. Le lancer est rattaché au groupe du panier, donc un `undo` après un and-1 retire les
+trois d'un bloc. C'est correct, mais ça mérite d'être connu.
+
+**8. Un bouton désactivé n'enregistre rien, même si le navigateur lui délivre l'événement.**
+Les navigateurs ne dispatchent pas de pointer events sur un élément `disabled`, mais faire
+porter la garantie au navigateur laissait un `disabled` qui n'empêchait rien d'écrire dans
+jsdom. `usePress` vérifie `currentTarget.disabled` — central, protège tous les appelants.
+
+#### Trois bugs réels trouvés par les tests
+
+**1. `usePress` enregistrait un tap sur un relâchement sans appui.**
+`onPointerUp` appelait `onTap` sans vérifier qu'un `pointerdown` avait eu lieu. Un second
+doigt posé et levé rapidement, ou un `pointercancel` suivi d'un `pointerup`, auraient créé une
+action fantôme. Corrigé par un `pressing` en ref.
+
+**2. jsdom n'implémente pas `PointerEvent` — les appuis longs n'étaient pas testables.**
+React 19 n'abonne pas ses écouteurs synthétiques `pointerdown` sans ce global : les tests de
+l'appui long échouaient sans raison apparente. Un simple alias vers `MouseEvent` ne suffisait
+pas — `isPrimary` n'existe pas sur `MouseEvent`, donc le hook ignorait tous les appuis. Le
+polyfill recopie `pointerId`, `pointerType`, `isPrimary` et `pressure`.
+
+**3. `useAsyncData` : `loading` ne repasse jamais à `true`.**
+Choix d'ergonomie assumé : après un tir, le carrousel doit continuer à afficher les stats
+précédentes pendant la relecture IndexedDB. Faire clignoter « Chargement… » à chaque panier
+rendrait l'écran illisible en bord de terrain. `loading` ne sert qu'au tout premier rendu.
+
+#### Notes de mise en œuvre
+
+- **`usePress` est le seul endroit du projet où le geste est implémenté.** C'est ce qui rend le
+  contrat testable : un test vérifie qu'un appui de 600 ms n'enregistre _ni_ tap _ni_ double
+  action, ce qui est l'erreur la plus coûteuse possible ici — un score faux sans signal.
+- **`AwardedFreeThrows` est relu sur l'action écrite**, pas déduit du bouton pressé dans
+  `CombosBar`. Si la règle métier change un jour, la fiche affichera le bon nombre sans qu'un
+  seul bouton soit touché.
+- **`revision` dans le store force la relecture des statistiques** sans que le composant ait à
+  savoir d'où vient l'écriture (tir, undo, série de LF). Indirection volontaire.
+- **Stats du carrousel = période courante**, pas cumul du match. Afficher le cumul ferait
+  passer un joueur à 12 points pour un tireur de 6 en cours de quart temps.
+- **`Bouton.tsx` n'est plus utilisé** : chaque cible de la grille a son propre état pressé via
+  `usePress`, qu'un bouton générique ne pourrait pas exposer. Supprimé.
+- **Les `role="tab"` du carrousel** annoncent la liste des joueurs au lecteur d'écran, même si
+  le carrousel est avant tout tactile.
 
 ---
 
@@ -617,14 +714,50 @@ Tâches :
 
 ## 7. État actuel
 
-| | |
-|---|---|
-| **Phase courante** | Phase 3 — Prototype tactile · **PORTE DE VALIDATION** |
-| **Prochaine étape** | Store Zustand de match (`playerId` verrouillé, `quarter`, sheet ouverte), puis écran `/` |
-| **Dernière action** | Phase 2 terminée : 239 tests, `src/data` couvert à 100 % lignes / 99,6 % branches |
-| **Phases terminées** | Phase 0, Phase 1, Phase 2 |
-| **Porte de validation** | Phase 3 — **en attente du retour terrain** |
-| **Blocage** | `git init` impossible : licence Xcode non acceptée sur cette machine |
+|                         |                                                                             |
+| ----------------------- | --------------------------------------------------------------------------- |
+| **Phase courante**      | Phase 3 — Prototype tactile · **PORTE : test terrain à faire**              |
+| **Prochaine étape**     | Tester sur un vrai téléphone (procédure README §4), puis retour ergonomique |
+| **Dernière action**     | 346 tests · validé en local par le commanditaire · `pnpm verify` au vert    |
+| **Phases terminées**    | Phase 0, Phase 1, Phase 2. Phase 3 code validé en local                     |
+| **Porte de validation** | Phase 3 — reste le test sur téléphone, notamment le geste 400 ms            |
+| **Blocage**             | Aucun technique. Rester : erreurs DNS en local (pare-feu ou isolation AP)   |
+| **Prochaine phase**     | Phase 4 (clôture, feuille de match, export) — après le retour terrain       |
+
+### Fichiers créés en Phase 3
+
+```
+src/features/match/store.ts            store Zustand : joueur verrouillé, période, sheet,
+                                       record(), undoLast(), revision (force la relecture)
+src/features/match/ActionGrid.tsx      grille 88px (2pts / 3pts / faute / LF) + bandeau stats avancées 44px
+src/features/match/CombosBar.tsx       2P+F, 3P+F, R+F+2LF, R+F+3LF — un geste = une action
+src/features/match/PlayerCarousel.tsx  carrousel joueurs + useMatchData (roster, stats de la période)
+src/features/match/MatchHeader.tsx     période Q1-Q4, score, annulation, rappels de lancers
+src/features/match/FreeThrowSheet.tsx  fiche 2-3 lancers, ✓ / ✗ par ballon
+src/features/match/formatDate.ts       formatage des dates (isolé : 3 écrans l'utilisent)
+src/ui/usePress.ts                     tap vs appui long 400 ms — implémenté UNE seule fois
+src/ui/haptics.ts                      motifs de vibration distincts (réussi / raté / combo / undo)
+src/ui/useWakeLock.ts                  écran allumé, réacquis à chaque retour de visibilité
+src/ui/useAsyncData.ts                 lecture IndexedDB → état React
+src/ui/Sheet.tsx                       feuille modale, pas de fermeture au clic sur le fond
+src/ui/Toast.tsx                       annonce d'annulation, fenêtre de 4 s
+src/ui/Badges.tsx                      pastilles de fautes + résumé live d'un joueur
+src/app/new-match/page.tsx             date, adversaire, roster pré-coché, création rapide de joueur
+src/app/page.tsx                       matchs non terminés + « Nouveau match »
+src/app/match/page.tsx                 écran de saisie complet
+tests/features/press.test.tsx          25 tests — le geste et ce qu'il écrit en base
+tests/features/screens.test.tsx        47 tests — carrousel, header, fiche LF, Sheet, Toast, badges
+```
+
+### Vérifications effectuées en fin de Phase 3
+
+- `pnpm verify` (typecheck + lint + test + build) → au vert, 4 routes `(Static)`
+- `pnpm test` → 313 tests passés (239 en phase 2, 74 nouveaux)
+- `pnpm test:coverage` → global 98,83 % lignes · 97,77 % stmts · 97,13 % fonctions · 94,34 %
+  branches. `features/match` à 96,45 % lignes
+- `pnpm format:check` → conforme
+- `pnpm lint` → aucune erreur, aucun avertissement (règle `react-hooks/set-state-in-effect`
+  incluse)
 
 ### Fichiers créés en Phase 2
 
@@ -736,43 +869,65 @@ l'état en attendant ; toute réponse contraire déclenche une correction.
 
 Une entrée par tâche ou groupe de tâches. Format : date · phase · quoi · résultat.
 
-| Date | Phase | Action | Résultat |
-|---|---|---|---|
-| 2026-10-05 | — | Plan initial rédigé | Stack et phases validées après questions |
-| 2026-10-05 | — | Passage d'OAuth Google à email + mot de passe Supabase | Confirmation email désactivée, zéro email au quotidien, session 30 j |
-| 2026-10-05 | 0 | `create-next-app` échoue (dossier `SpaceBunny` avec majuscules + pnpm absent) | Scaffoldé dans un dossier temporaire, `pnpm` activé via corepack, tout déplacé |
-| 2026-10-05 | 0 | `next.config.ts` : `output:'export'` + `trailingSlash` | Build statique confirmé, 4 routes prérendues |
-| 2026-10-05 | 0 | `tsconfig.json` durci | `noUncheckedIndexedAccess` etc. pour sécuriser les unions discriminées du domaine |
-| 2026-10-05 | 0 | Thème dark + tokens tactiles dans `globals.css` | Cibles 44/88px, safe-area, `dvh`, police système (pas de font réseau) |
-| 2026-10-05 | 0 | Vitest + ESLint + Prettier + Playwright configurés | Seuils couverture 90 %, règles a11y tactiles |
-| 2026-10-05 | 0 | `pnpm verify` | ✅ typecheck + lint + test + build au vert, `out/` produit |
-| 2026-10-05 | 0 | `git init` + commit | ❌ bloqué : licence Xcode non acceptée (`sudo xcodebuild -license`) |
-| 2026-10-05 | 1 | `src/domain/types.ts` — schémas Zod | `Action` validé au-delà des types : un tir sans `value`/`made`, une période hors 1-4, et `fouled` sur une faute simple sont **rejetés**. Ce dernier garde-fou empêche le double comptage de faute |
-| 2026-10-05 | 1 | `src/domain/rules.ts` — `project()` + `combos.*` | Règle non-FIBA isolée dans `projectShot()`, documentée et testée séparément |
-| 2026-10-05 | 1 | 🔴 Correction : double comptage des FTA | `+2 FTA` sur le tir fouillé **plus** `+1` par lancer saisi = 4 FTA pour une série de 2. Corrigé : le tir fouillé ne compte que `+1 faute`, `awardedFreeThrows()` renvoie le nombre de lancers dus |
-| 2026-10-05 | 1 | 🔴 Correction : `madeAndFouled` créait une faute en double | Une action `foul` séparée s'ajoutait à la faute déjà portée par le `shot`. Le combo ne crée plus qu'**une** action |
-| 2026-10-05 | 1 | 🟡 Suppression de `includeVoided` | `project()` neutralise toujours les actions annulées : le filtre n'aurait eu aucun effet. Retiré plutôt que laissé en place ; `actionsOfMatch()` est le seul moyen de les lire |
-| 2026-10-05 | 1 | `ActionDraft` en union discriminée | Champs obligatoires garantis par le type : impossible de compiler un rebond sans `side`. Erreurs à la compilation, pas à l'exécution |
-| 2026-10-05 | 1 | `src/domain/stats.ts` — agrégats | `aggregate`, `cumulativeStats`, `pointsByQuarter`, `pendingFreeThrows` (appariement séquentiel par joueur, pas de décompte global) |
-| 2026-10-05 | 1 | `src/domain/undo.ts` — annulation groupée | `undoScope` + `applyUndo`, fonctions pures. `redoHint` prépare l'affichage « Réfaire : … » du toast |
-| 2026-10-05 | 1 | 🔴 Correction : `applyUndo` perdait des actions | Renvoyait le périmètre annulé au lieu de la liste complète, faisant disparaître les actions non concernées. Corrigé, testé par `activeCount` |
-| 2026-10-05 | 1 | 2 fixtures de test fautives corrigées | `combos.missed(..., 1)` passait `value: 1` (ni 2 ni 3) ; un `matchId` réétiqueté par index dispersait les joueurs sur les 3 matchs |
-| 2026-10-05 | 1 | `tsconfig.json` : ajout de `vitest/globals` | `describe`/`it`/`expect` n'étaient pas typés |
-| 2026-10-05 | 1 | Installation de `@vitest/coverage-v8` | `pnpm test:coverage` échouait sur une dépendance manquante |
-| 2026-10-05 | 1 | Prettier : `semi: true` | Le formatage initial avait retiré les points-virgules du code généré |
-| 2026-10-05 | 1 | `pnpm verify` + couverture | ✅ 115 tests · domaine 99,22 % stmts, 97,22 % branches, 100 % lignes |
-| 2026-10-05 | 2 | `src/data/ids.ts` — `newId()` | UUID v4 via `crypto.randomUUID`, repli `getRandomValues` pour Safari < 15.4. L'`id` est généré **avant** l'écriture locale : c'est la clé de dédupe de la sync et il doit exister dès le geste du coach |
-| 2026-10-05 | 2 | `src/data/schema.ts` — schéma Dexie v1/v2 | Colonnes `updatedAt` (curseur de tirage descendant), index `voidedAt`, `updatedAt`, `[entity+entityId]` sur l'outbox. `V1_SCHEMA` conservé tel quel : le modifier ferait échouer la vérification de l'upgrade |
-| 2026-10-05 | 2 | `migrateV1ToV2()` — repli `updatedAt = 0` | `0` et non `Date.now()` : le premier tirage descendant doit rattraper les lignes préexistantes, sinon des matchs saisis avant la mise à jour resteraient invisibles côté serveur, définitivement |
-| 2026-10-05 | 2 | 🔴 `groupId` non indexé sur `actions` | `voidGroup()` — donc l'annulation groupée d'un `2P+F` — imposait un parcours complet de la table. Ajouté à v2 ; un test échouait franchement (`KeyPath groupId on object store actions is not indexed`) |
-| 2026-10-05 | 2 | `src/data/outbox.ts` — une entrée par ligne | Clé primaire déterministe `entity:entityId`. Créer puis annuler remplace l'entrée au lieu de l'accumuler : le cloud ne fait que des upserts, le dernier état suffit |
-| 2026-10-05 | 2 | `attempts`/`lastError` conservés au remplacement d'entrée | Sinon chaque nouvelle action locale remettait le backoff à zéro — une mutation locale ne rend pas un serveur injoignable joignable |
-| 2026-10-05 | 2 | `src/data/repositories.ts` — 4 interfaces + implémentations Dexie | `append()` attribue `seq` et `id` : impossible d'écrire deux actions de même `seq` lors d'un appui rapide ou d'un double rendu React. `undoLast()` délègue le périmètre à `undoScope()` du domaine |
-| 2026-10-05 | 2 | `nextSeq()` atomique par sérialisation Dexie | Lecture-modification-écriture dans une transaction `rw` unique, sans verrou à écrire. Vérifié par 10 `append()` concurrents → `seq` 0..9 sans doublon |
-| 2026-10-05 | 2 | `lastSeqIn()` via l'index composé `[matchId+seq]` | O(log n) au lieu de O(n) : un match peut compter plusieurs centaines d'événements et on écrit à chaque appui |
-| 2026-10-05 | 2 | Validation Zod **avant** écriture | Une ligne invalide est rejetée avant d'atteindre IndexedDB. Un combo au second draft invalide ne laisse aucune ligne ni entrée d'outbox derrière lui |
-| 2026-10-05 | 2 | `src/data/index.ts` — point d'entrée unique | Les composants obtiennent des repositories, jamais une base. `db()` paresseux : `output: 'export'` prerend dans un Node sans `indexedDB` |
-| 2026-10-05 | 2 | Suppression de `createTestDb()` | Ne faisait que déléguer au constructeur ; les tests construisent `new SpaceBunnyDb(nom unique)` en direct. `db.ts` fusionné dans `schema.ts` |
-| 2026-10-05 | 2 | Tests : base v1 créée à la main | `LegacyV1Db` reproduit un upgrade réel — `Dexie.verno` ne permettant pas de le simuler autrement. Vérifie colonnes, valeurs, idempotence et utilité du curseur après migration |
-| 2026-10-05 | 2 | Test : stats cohérentes après annulation | L'annulation relue **depuis la base** (pas depuis l'objet renvoyé) doit déjà avoir disparaître l'action des points — c'est ce que verra l'écran de saisie |
-| 2026-10-05 | 2 | `pnpm verify` + couverture | ✅ 239 tests · `src/data` 100 % lignes / 100 % fonctions / 99,59 % branches |
+| Date       | Phase | Action                                                                        | Résultat                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-05 | —     | Plan initial rédigé                                                           | Stack et phases validées après questions                                                                                                                                                                                                                                                                  |
+| 2026-10-05 | —     | Passage d'OAuth Google à email + mot de passe Supabase                        | Confirmation email désactivée, zéro email au quotidien, session 30 j                                                                                                                                                                                                                                      |
+| 2026-10-05 | 0     | `create-next-app` échoue (dossier `SpaceBunny` avec majuscules + pnpm absent) | Scaffoldé dans un dossier temporaire, `pnpm` activé via corepack, tout déplacé                                                                                                                                                                                                                            |
+| 2026-10-05 | 0     | `next.config.ts` : `output:'export'` + `trailingSlash`                        | Build statique confirmé, 4 routes prérendues                                                                                                                                                                                                                                                              |
+| 2026-10-05 | 0     | `tsconfig.json` durci                                                         | `noUncheckedIndexedAccess` etc. pour sécuriser les unions discriminées du domaine                                                                                                                                                                                                                         |
+| 2026-10-05 | 0     | Thème dark + tokens tactiles dans `globals.css`                               | Cibles 44/88px, safe-area, `dvh`, police système (pas de font réseau)                                                                                                                                                                                                                                     |
+| 2026-10-05 | 0     | Vitest + ESLint + Prettier + Playwright configurés                            | Seuils couverture 90 %, règles a11y tactiles                                                                                                                                                                                                                                                              |
+| 2026-10-05 | 0     | `pnpm verify`                                                                 | ✅ typecheck + lint + test + build au vert, `out/` produit                                                                                                                                                                                                                                                |
+| 2026-10-05 | 0     | `git init` + commit                                                           | ❌ bloqué : licence Xcode non acceptée (`sudo xcodebuild -license`)                                                                                                                                                                                                                                       |
+| 2026-10-05 | 1     | `src/domain/types.ts` — schémas Zod                                           | `Action` validé au-delà des types : un tir sans `value`/`made`, une période hors 1-4, et `fouled` sur une faute simple sont **rejetés**. Ce dernier garde-fou empêche le double comptage de faute                                                                                                         |
+| 2026-10-05 | 1     | `src/domain/rules.ts` — `project()` + `combos.*`                              | Règle non-FIBA isolée dans `projectShot()`, documentée et testée séparément                                                                                                                                                                                                                               |
+| 2026-10-05 | 1     | 🔴 Correction : double comptage des FTA                                       | `+2 FTA` sur le tir fouillé **plus** `+1` par lancer saisi = 4 FTA pour une série de 2. Corrigé : le tir fouillé ne compte que `+1 faute`, `awardedFreeThrows()` renvoie le nombre de lancers dus                                                                                                         |
+| 2026-10-05 | 1     | 🔴 Correction : `madeAndFouled` créait une faute en double                    | Une action `foul` séparée s'ajoutait à la faute déjà portée par le `shot`. Le combo ne crée plus qu'**une** action                                                                                                                                                                                        |
+| 2026-10-05 | 1     | 🟡 Suppression de `includeVoided`                                             | `project()` neutralise toujours les actions annulées : le filtre n'aurait eu aucun effet. Retiré plutôt que laissé en place ; `actionsOfMatch()` est le seul moyen de les lire                                                                                                                            |
+| 2026-10-05 | 1     | `ActionDraft` en union discriminée                                            | Champs obligatoires garantis par le type : impossible de compiler un rebond sans `side`. Erreurs à la compilation, pas à l'exécution                                                                                                                                                                      |
+| 2026-10-05 | 1     | `src/domain/stats.ts` — agrégats                                              | `aggregate`, `cumulativeStats`, `pointsByQuarter`, `pendingFreeThrows` (appariement séquentiel par joueur, pas de décompte global)                                                                                                                                                                        |
+| 2026-10-05 | 1     | `src/domain/undo.ts` — annulation groupée                                     | `undoScope` + `applyUndo`, fonctions pures. `redoHint` prépare l'affichage « Réfaire : … » du toast                                                                                                                                                                                                       |
+| 2026-10-05 | 1     | 🔴 Correction : `applyUndo` perdait des actions                               | Renvoyait le périmètre annulé au lieu de la liste complète, faisant disparaître les actions non concernées. Corrigé, testé par `activeCount`                                                                                                                                                              |
+| 2026-10-05 | 1     | 2 fixtures de test fautives corrigées                                         | `combos.missed(..., 1)` passait `value: 1` (ni 2 ni 3) ; un `matchId` réétiqueté par index dispersait les joueurs sur les 3 matchs                                                                                                                                                                        |
+| 2026-10-05 | 1     | `tsconfig.json` : ajout de `vitest/globals`                                   | `describe`/`it`/`expect` n'étaient pas typés                                                                                                                                                                                                                                                              |
+| 2026-10-05 | 1     | Installation de `@vitest/coverage-v8`                                         | `pnpm test:coverage` échouait sur une dépendance manquante                                                                                                                                                                                                                                                |
+| 2026-10-05 | 1     | Prettier : `semi: true`                                                       | Le formatage initial avait retiré les points-virgules du code généré                                                                                                                                                                                                                                      |
+| 2026-10-05 | 1     | `pnpm verify` + couverture                                                    | ✅ 115 tests · domaine 99,22 % stmts, 97,22 % branches, 100 % lignes                                                                                                                                                                                                                                      |
+| 2026-10-05 | 2     | `src/data/ids.ts` — `newId()`                                                 | UUID v4 via `crypto.randomUUID`, repli `getRandomValues` pour Safari < 15.4. L'`id` est généré **avant** l'écriture locale : c'est la clé de dédupe de la sync et il doit exister dès le geste du coach                                                                                                   |
+| 2026-10-05 | 2     | `src/data/schema.ts` — schéma Dexie v1/v2                                     | Colonnes `updatedAt` (curseur de tirage descendant), index `voidedAt`, `updatedAt`, `[entity+entityId]` sur l'outbox. `V1_SCHEMA` conservé tel quel : le modifier ferait échouer la vérification de l'upgrade                                                                                             |
+| 2026-10-05 | 2     | `migrateV1ToV2()` — repli `updatedAt = 0`                                     | `0` et non `Date.now()` : le premier tirage descendant doit rattraper les lignes préexistantes, sinon des matchs saisis avant la mise à jour resteraient invisibles côté serveur, définitivement                                                                                                          |
+| 2026-10-05 | 2     | 🔴 `groupId` non indexé sur `actions`                                         | `voidGroup()` — donc l'annulation groupée d'un `2P+F` — imposait un parcours complet de la table. Ajouté à v2 ; un test échouait franchement (`KeyPath groupId on object store actions is not indexed`)                                                                                                   |
+| 2026-10-05 | 2     | `src/data/outbox.ts` — une entrée par ligne                                   | Clé primaire déterministe `entity:entityId`. Créer puis annuler remplace l'entrée au lieu de l'accumuler : le cloud ne fait que des upserts, le dernier état suffit                                                                                                                                       |
+| 2026-10-05 | 2     | `attempts`/`lastError` conservés au remplacement d'entrée                     | Sinon chaque nouvelle action locale remettait le backoff à zéro — une mutation locale ne rend pas un serveur injoignable joignable                                                                                                                                                                        |
+| 2026-10-05 | 2     | `src/data/repositories.ts` — 4 interfaces + implémentations Dexie             | `append()` attribue `seq` et `id` : impossible d'écrire deux actions de même `seq` lors d'un appui rapide ou d'un double rendu React. `undoLast()` délègue le périmètre à `undoScope()` du domaine                                                                                                        |
+| 2026-10-05 | 2     | `nextSeq()` atomique par sérialisation Dexie                                  | Lecture-modification-écriture dans une transaction `rw` unique, sans verrou à écrire. Vérifié par 10 `append()` concurrents → `seq` 0..9 sans doublon                                                                                                                                                     |
+| 2026-10-05 | 2     | `lastSeqIn()` via l'index composé `[matchId+seq]`                             | O(log n) au lieu de O(n) : un match peut compter plusieurs centaines d'événements et on écrit à chaque appui                                                                                                                                                                                              |
+| 2026-10-05 | 2     | Validation Zod **avant** écriture                                             | Une ligne invalide est rejetée avant d'atteindre IndexedDB. Un combo au second draft invalide ne laisse aucune ligne ni entrée d'outbox derrière lui                                                                                                                                                      |
+| 2026-10-05 | 2     | `src/data/index.ts` — point d'entrée unique                                   | Les composants obtiennent des repositories, jamais une base. `db()` paresseux : `output: 'export'` prerend dans un Node sans `indexedDB`                                                                                                                                                                  |
+| 2026-10-05 | 2     | Suppression de `createTestDb()`                                               | Ne faisait que déléguer au constructeur ; les tests construisent `new SpaceBunnyDb(nom unique)` en direct. `db.ts` fusionné dans `schema.ts`                                                                                                                                                              |
+| 2026-10-05 | 2     | Tests : base v1 créée à la main                                               | `LegacyV1Db` reproduit un upgrade réel — `Dexie.verno` ne permettant pas de le simuler autrement. Vérifie colonnes, valeurs, idempotence et utilité du curseur après migration                                                                                                                            |
+| 2026-10-05 | 2     | Test : stats cohérentes après annulation                                      | L'annulation relue **depuis la base** (pas depuis l'objet renvoyé) doit déjà avoir disparaître l'action des points — c'est ce que verra l'écran de saisie                                                                                                                                                 |
+| 2026-10-05 | 2     | `pnpm verify` + couverture                                                    | ✅ 239 tests · `src/data` 100 % lignes / 100 % fonctions / 99,59 % branches                                                                                                                                                                                                                               |
+| 2026-10-05 | 3     | `src/domain/types.ts` — `playerIds` sur `Match`                               | Manque du **modèle**, pas de l'écran : sans roster par match, un joueur arrivé en cours de saison apparaît dans les feuilles de match où il n'a pas joué, avec des zéros                                                                                                                                  |
+| 2026-10-05 | 3     | Migration v2 → v3 (`playerIds: []`)                                           | Roster **vide** et non le roster actuel : attribuer les joueurs d'aujourd'hui à un match d'il y a trois mois donnerait l'illusion qu'ils y ont joué                                                                                                                                                       |
+| 2026-10-05 | 3     | `src/features/match/store.ts` — Zustand                                       | Volatile par construction : joueur verrouillé, période, sheet. Toute donnée de saisie qui vivrait ici serait perdue au rechargement PWA, ce que la phase 7 ne pourra pas rattraper                                                                                                                        |
+| 2026-10-05 | 3     | `src/ui/usePress.ts` — tap vs appui long                                      | Implémenté **une seule fois** dans tout le projet. L'appui long annule le tap : sans ça, un appui de 600 ms compterait un panier _et_ un raté                                                                                                                                                             |
+| 2026-10-05 | 3     | 🔴 Bug : tap sur relâchement sans appui                                       | `onPointerUp` appelait `onTap` sans vérifier qu'un `pointerdown` avait eu lieu. Un second doigt posé et levé vite créait une action fantôme. Corrigé par un `pressing` en ref                                                                                                                             |
+| 2026-10-05 | 3     | 🔴 jsdom n'implémente pas `PointerEvent`                                      | React 19 n'abonne pas `pointerdown` sans ce global : les tests d'appui long échouaient sans raison. Un alias `MouseEvent` ne suffisait pas — `isPrimary` n'existe pas sur `MouseEvent`, le hook ignorait donc **tous** les appuis. Polyfill qui recopie `pointerId`/`pointerType`/`isPrimary`/`pressure`  |
+| 2026-10-05 | 3     | 🔴 La période existait en double source                                       | Store d'un côté, prop de l'autre. Le test enregistrait un tir en Q1 pendant que le composant affichait Q2. Le store est désormais l'unique source ; `ActionGrid` et `CombosBar` le lisent                                                                                                                 |
+| 2026-10-05 | 3     | `combos.*` abandonnés par la grille                                           | Ils exigent un `groupId` non vide ; un geste simple n'a pas de groupe, le store en crée un par écriture. Un `groupId: ""` a été essayé et **rejeté par la validation Zod** — le garde-fou a fait son travail                                                                                              |
+| 2026-10-05 | 3     | `CombosBar` relit `awardedFreeThrows` sur l'action écrite                     | Jamais déduit du bouton pressé : si la règle métier change, la fiche affiche le bon nombre sans qu'un bouton soit touché                                                                                                                                                                                  |
+| 2026-10-05 | 3     | `useAsyncData` — `loading` ne repasse jamais à `true`                         | Choix d'ergonomie : après un tir le carrousel doit garder les stats précédentes pendant la relecture. Un « Chargement… » clignotant à chaque panier rendrait l'écran illisible en gymnase                                                                                                                 |
+| 2026-10-05 | 3     | `Sheet` ne se ferme pas au clic sur le fond                                   | Une annulation accidentelle ferait perdre un combo entier, et le coach ne le verrait pas tout de suite                                                                                                                                                                                                    |
+| 2026-10-05 | 3     | `Bouton.tsx` supprimé                                                         | Chaque cible de la grille a son propre état pressé via `usePress`, qu'un bouton générique ne peut pas exposer                                                                                                                                                                                             |
+| 2026-10-05 | 3     | `pnpm verify` + couverture                                                    | ✅ 313 tests · global 98,83 % lignes, 97,77 % stmts, 97,13 % fonctions, 94,34 % branches                                                                                                                                                                                                                  |
+| 2026-10-05 | 3     | `scripts/serve.mjs` + procédure de test local dans README                     | Serveur statique sans dépendance, en-têtes `no-cache`/`immutable` comme Nginx de la phase 7, HTTPS optionnel. Safari refuse IndexedDB en HTTP : un test réussi sur Android ne prouve rien sur iOS                                                                                                         |
+| 2026-10-05 | 3     | 🔴 `PlayerSchema` exigeait prénom et nom                                      | « Dupont » seul était rejeté, et sans `catch` dans l'UI l'échec était une promesse rejetée sans message — le bouton paraissait mort. `firstName` peut désormais être vide, `lastName` porte l'identité. `playerLabel`/`playerShortName`/`playerInitial` gèrent la forme sans prénom, sans espace parasite |
+| 2026-10-05 | 3     | 🔴 Texte des `<input>` invisible                                              | La couleur vient de la feuille de l'agent utilisateur, pas du `body` : Tailwind v4 ne réinitialise pas cette propriété. Du texte noir sur fond sombre. Corrigé par une classe commune avec `text-primary` explicite                                                                                       |
+| 2026-10-05 | 3     | 🔴 Un tir raté était invisible à l'écran                                      | Il ne changeait ni le score, ni les points du joueur, ni les pastilles — le seul compteur modifié, `fga`, n'était affiché nulle part. Corrigé deux fois : tirs affichés en `réussis/tentés` dans le carrousel, et bannière d'acquittement de 1,1 s nommant l'action                                       |
+| 2026-10-05 | 3     | `describeAction()` dans le domaine                                            | Le vocabulaire vient du domaine, pas des composants : « Panneau 3 pts + faute », « LF raté ». L'UI ne réinvente pas son lexique, et le fil du match de la phase 4 en héritera tel quel                                                                                                                    |
+| 2026-10-05 | 3     | 🟡 Écart au plan : FAUTE bloqué à 5 fautes                                    | Décision du commanditaire, le plan §1 disait « pas d'élimination ». Bouton désactivé, compteur affiché, libellé expliquant le blocage. Les autres cibles restent actives                                                                                                                                  |
+| 2026-10-05 | 3     | 🔴 `awardedFreeThrows()` ignorait l'and-1                                     | Ne renvoyait quelque chose que pour un tir **raté** : `2P+F` n'ouvrait aucune fiche et `pendingFreeThrows()` ne signalait jamais le lancer dû. Désormais 1 lancer après un panier, 2 ou 3 après un tir raté selon sa valeur. Le `undo` d'un and-1 retire panier + faute + lancer d'un bloc                |
+| 2026-10-05 | 3     | `usePress` — bouton désactivé n'enregistre rien                               | Les navigateurs ne dispatchent pas de pointer events sur un `disabled`, mais s'y fier laissait la garantie dépendre du navigateur. Vérification de `currentTarget.disabled` dans le hook, central pour tous les appelants                                                                                 |
+| 2026-10-05 | 3     | `pnpm verify` + couverture                                                    | ✅ 346 tests · global 98,71 % lignes · validé en local par le commanditaire                                                                                                                                                                                                                               |

@@ -37,6 +37,9 @@ yarn-error.log*
 # Le gabarit est versionné : il documente les variables attendues sans exposer de secret.
 !.env.example
 
+# certificats mkcert, générés localement pour tester sur iOS
+/.certs
+
 # playwright
 /playwright-report
 /test-results

@@ -460,9 +460,74 @@ export function cumulativeStats(
 // présentation
 // ---------------------------------------------------------------------------
 
-/** Nom d'affichage d'un joueur. */
+/**
+ * Phrase courte décrivant une action, pour le fil du match et le retour immédiat
+ * de saisie.
+ *
+ * Une action muette est une action dont le coach doute. Un tir raté ne change ni
+ * le score ni aucune pastille affichée : sans retour explicite, le coach ne sait
+ * pas si son appui long est passé et il recommence, ou il passe au joueur
+ * suivant en croyant le tir compté. Une phrase de six mots lève le doute sans
+ * qu'il ait à lever les yeux du terrain.
+ *
+ * Le vocabulaire est celui du coach, pas celui du code : « Panier », « Panneau »,
+ * « LF », « Faute ».
+ */
+export function describeAction(action: Action): string {
+  switch (action.kind) {
+    case "shot": {
+      const points = action.value === 3 ? "3 pts" : "2 pts";
+      if (action.made === true) {
+        return action.fouled === true
+          ? `Panneau ${points} + faute`
+          : `Panier ${points}`;
+      }
+      return action.fouled === true
+        ? `Tir ${points} raté + faute`
+        : `Tir ${points} raté`;
+    }
+    case "free_throw":
+      return action.made === true ? "LF réussi" : "LF raté";
+    case "foul":
+      return "Faute";
+    case "rebound":
+      return action.side === "offensive"
+        ? "Rebond offensif"
+        : "Rebond défensif";
+    case "assist":
+      return "Passe";
+    case "turnover":
+      return "Perte de balle";
+    case "steal":
+      return "Interception";
+    case "block":
+      return "Contre";
+    case "substitution":
+      return "Remplacement";
+  }
+}
+
+/** Nom d'affichage d'un joueur.
+ *
+ * Le nom de famille seul si le prénom est inconnu : « Dupont » plutôt que
+ * «  Dupont » avec une espace parasite en tête. L'ordre est prénom puis nom
+ * parce que c'est ainsi qu'on annonce quelqu'un à voix haute.
+ */
 export function playerLabel(player: Player): string {
-  return `${player.firstName} ${player.lastName}`;
+  return player.firstName === ""
+    ? player.lastName
+    : `${player.firstName} ${player.lastName}`;
+}
+
+/**
+ * Nom court pour les surfaces étroites (carrousel joueurs).
+ *
+ * Prénom quand il est connu, sinon nom de famille : dans un onglet de 96 px de
+ * large, « Lovelace » et « Alan » ont la même utilité, et un champ vide
+ * donnerait l'illusion d'un bug de rendu.
+ */
+export function playerShortName(player: Player): string {
+  return player.firstName === "" ? player.lastName : player.firstName;
 }
 
 /**
@@ -483,7 +548,8 @@ export function formatPercentage(value: number | null): string {
   return value === null ? "—" : `${Math.round(value)}%`;
 }
 
-/** Première lettre du prénom, pour les pastilles du carrousel joueurs. */
+/** Initiale du joueur, pour les pastilles et avatars. */
 export function playerInitial(player: Player): string {
-  return player.firstName.charAt(0).toUpperCase();
+  const source = player.firstName === "" ? player.lastName : player.firstName;
+  return source.charAt(0).toUpperCase();
 }

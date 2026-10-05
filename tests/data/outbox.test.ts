@@ -246,8 +246,10 @@ describe("atomicité mutation + outbox", () => {
     await repos.teams.ensureLocal();
     const before = await pendingCount(database);
 
+    // Le prénom peut être vide depuis la relaxation du schéma : il faut une
+    // violation réelle pour tester l'atomicité. Ici, aucun nom du tout.
     await expect(
-      repos.players.create("local", { firstName: "", lastName: "Sans prénom" }),
+      repos.players.create("local", { firstName: "", lastName: "   " }),
     ).rejects.toThrow(/invalide/i);
 
     expect(await pendingCount(database)).toBe(before);

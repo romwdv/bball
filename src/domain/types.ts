@@ -157,7 +157,14 @@ export type Action = z.infer<typeof ActionSchema>;
 export const PlayerSchema = z.object({
   id: z.string().min(1),
   teamId: z.string().min(1),
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire"),
+  /**
+   * Prénom. **Peut être vide** : en bord de terrain, on connaît le nom de
+   * famille de tout le monde et le prénom de personne. Exiger les deux rendait
+   * la saisie rapide inutilisable — « Dupont » seul était rejeté en silence.
+   *
+   * `lastName` porte donc l'identité, `firstName` n'est qu'un complément.
+   */
+  firstName: z.string().trim(),
   lastName: z.string().trim().min(1, "Le nom est obligatoire"),
   /** Numéro de maillot. Nullable car certains clubs n'en utilisent pas. */
   number: z.number().int().min(0).max(99).nullable(),
@@ -176,6 +183,20 @@ export const MatchSchema = z.object({
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format YYYY-MM-DD"),
+  /**
+   * Roster de ce match : les joueurs qui y ont joué.
+   *
+   * Le roster de l'**équipe** est persistant et s'enrichit match après match ;
+   * ce champ ne fait que dire qui était sur le parquet ce jour-là. Sans lui, un
+   * joueur arrivé en cours de saison apparaîtrait dans la feuille de match des
+   * matchs où il n'a pas joué, avec des zéros — et l'écran de saisie ne pourrait
+   * pas afficher les seuls joueurs disponibles.
+   *
+   * Un tableau plutôt qu'une table de jointure : la relation est 1-n, sans
+   * attribut propre, et une jointure coûterait une lecture de plus à chaque
+   * affichage pour n'apporter rien.
+   */
+  playerIds: z.array(z.string().min(1)),
   status: MatchStatus,
   createdAt: z.number().int().nonnegative(),
   finishedAt: z.number().int().nonnegative().nullable(),

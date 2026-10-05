@@ -261,10 +261,18 @@ describe("série de lancers après faute sur tir manqué", () => {
     ).toBe(3);
   });
 
-  it("aucune série pour un tir réussi, un tir raté sans faute, une faute ou un LF", () => {
+  it("un seul lancer après un panier + faute (and-1)", () => {
+    // Règle FIBA, et cas réel : sans ce 1, `2P+F` n'ouvrait aucune fiche et
+    // `pendingFreeThrows()` ne signalait jamais le lancer dû.
+    expect(awardedFreeThrows(makeAction({ made: true, fouled: true }))).toBe(1);
+    // Un and-1 à 3 points ne donne toujours qu'un lancer : le panier vaut 3,
+    // pas 3 lancers.
     expect(
-      awardedFreeThrows(makeAction({ made: true, fouled: true })),
-    ).toBeNull();
+      awardedFreeThrows(makeAction({ made: true, fouled: true, value: 3 })),
+    ).toBe(1);
+  });
+
+  it("aucune série pour un tir raté sans faute, une faute ou un LF", () => {
     expect(
       awardedFreeThrows(makeAction({ made: false, fouled: false })),
     ).toBeNull();

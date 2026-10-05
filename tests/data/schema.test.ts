@@ -28,6 +28,22 @@ class LegacyV1Db extends Dexie {
   }
 }
 
+/** Base à l'état v2 : c'est le dernier état qui existait avant `playerIds`. */
+class LegacyV2Db extends Dexie {
+  declare teams: Dexie.Table<Record<string, unknown>, string>;
+  declare players: Dexie.Table<Record<string, unknown>, string>;
+  declare matches: Dexie.Table<Record<string, unknown>, string>;
+  declare actions: Dexie.Table<Record<string, unknown>, string>;
+  declare syncState: Dexie.Table<Record<string, unknown>, string>;
+  declare outbox: Dexie.Table<Record<string, unknown>, string>;
+
+  constructor(name: string) {
+    super(name);
+    this.version(1).stores(V1_SCHEMA);
+    this.version(2).stores(V2_SCHEMA);
+  }
+}
+
 let counter = 0;
 function uniqueName(): string {
   counter += 1;
@@ -57,7 +73,7 @@ describe("schéma Dexie", () => {
   it("s'ouvre en version courante", async () => {
     const database = new SpaceBunnyDB(uniqueName());
     await database.open();
-    expect(database.verno).toBe(2);
+    expect(database.verno).toBe(3);
     database.close();
   });
 
@@ -144,7 +160,7 @@ describe("schéma Dexie", () => {
       const upgraded = new SpaceBunnyDB(name);
       await upgraded.open();
 
-      expect(upgraded.verno).toBe(2);
+      expect(upgraded.verno).toBe(3);
       // 0 et non `Date.now()` : une valeur élevée ferait passer ces lignes pour
       // déjà synchronisées et le cloud ne les recevrait jamais.
       expect(await upgraded.players.get("p1")).toMatchObject({ updatedAt: 0 });
@@ -360,6 +376,66 @@ describe("schéma Dexie", () => {
       }
 
       legacy.close();
+    });
+  });
+
+  describe("migration v2 → v3", () => {
+    it("ajoute un roster vide aux matchs qui n'en ont pas", async () => {
+      const name = uniqueName();
+
+      const legacy = new LegacyV2Db(name);
+      await legacy.open();
+      await legacy.matches.put({
+        id: "m1",
+        teamId: "local",
+        opponentName: "BC Nuit",
+        date: "2026-10-05",
+        status: "finished",
+        createdAt: 1,
+        finishedAt: 2,
+        updatedAt: 1_700_000_000_000,
+      });
+      legacy.close();
+
+      const upgraded = new SpaceBunnyDB(name);
+      await upgraded.open();
+
+      const match = await upgraded.matches.get("m1");
+      // Vide, et non le roster actuel de l'équipe : attribuer retroactivement
+      // les joueurs d'aujourd'hui à un match d'il y a trois mois donnerait
+      // l'illusion qu'ils y ont joué.
+      expect(match?.playerIds).toEqual([]);
+      // La colonne `updatedAt` de v2 est préservée telle quelle.
+      expect(match?.updatedAt).toBe(1_700_000_000_000);
+      upgraded.close();
+    });
+
+    it("préserve un roster déjà enregistré", async () => {
+      const name = uniqueName();
+
+      const legacy = new LegacyV2Db(name);
+      await legacy.open();
+      await legacy.matches.put({
+        id: "m1",
+        teamId: "local",
+        opponentName: "BC Nuit",
+        date: "2026-10-05",
+        status: "live",
+        createdAt: 1,
+        finishedAt: null,
+        updatedAt: 5,
+        playerIds: ["p1", "p2"],
+      });
+      legacy.close();
+
+      const upgraded = new SpaceBunnyDB(name);
+      await upgraded.open();
+
+      expect((await upgraded.matches.get("m1"))?.playerIds).toEqual([
+        "p1",
+        "p2",
+      ]);
+      upgraded.close();
     });
   });
 

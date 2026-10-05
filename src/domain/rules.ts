@@ -430,18 +430,25 @@ export const combos = {
 } as const;
 
 /**
- * Nombre de lancers accordés après une faute sur un tir manqué.
- * Retourne `null` si l'action n'ouvre pas une série de lancers.
+ * Nombre de lancers accordés après une faute sur un tir, ou `null` si le tir
+ * n'ouvre aucune série.
+ *
+ * Règle FIBA appliquée :
+ * - tir **raté** + faute → 2 lancers à l'espace, 3 si le tir valait 3 points ;
+ * - tir **réussi** + faute (and-1) → **1** lancer, quelle que soit la valeur du
+ *   tir.
+ *
+ * Le cas de l'and-1 manquait dans une première version, où seul le tir raté
+ * ouvrait une série. Deux conséquences, toutes deux réelles : le bouton `2P+F`
+ * n'ouvrait aucune fiche, et `pendingFreeThrows()` ne signalait jamais le lancer
+ * dû après un panier. Le coach devaitdeviner qu'il lui restait un lancer à
+ * entrer.
  *
  * Alimente la mini-sheet de saisie des LF ouverte par les combos.
  */
 export function awardedFreeThrows(action: Action): number | null {
-  if (
-    action.kind !== "shot" ||
-    action.made !== false ||
-    action.fouled !== true
-  ) {
-    return null;
-  }
+  if (action.kind !== "shot" || action.fouled !== true) return null;
+  // Un and-1 : le panier est marqué, il ne reste qu'un lancer à saisir.
+  if (action.made === true) return 1;
   return action.value === 3 ? 3 : 2;
 }

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "serve": "node scripts/serve.mjs",
+    "serve:https": "node scripts/serve.mjs --https",
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "format": "prettier --write .",

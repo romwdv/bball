@@ -122,6 +122,12 @@ describe("PlayerRepository", () => {
     expect(player.number).toBeNull();
   });
 
+  it("refuse un joueur totalement anonyme", async () => {
+    await expect(
+      repos.players.create("local", { firstName: "", lastName: "" }),
+    ).rejects.toThrow(/invalide/i);
+  });
+
   it("trim les espaces des noms", async () => {
     const player = await repos.players.create("local", {
       firstName: "  Ada ",
@@ -132,9 +138,21 @@ describe("PlayerRepository", () => {
     expect(player.lastName).toBe("Lovelace");
   });
 
-  it("refuse un prénom vide", async () => {
+  it("accepte un nom seul, sans prénom", async () => {
+    // Cas le plus fréquent en bord de terrain : on connaît le nom de famille de
+    // tout le monde, le prénom de personne. Le prénom vide est donc valide, et
+    // `lastName` porte l'identité.
+    const player = await repos.players.create("local", {
+      firstName: "",
+      lastName: "Dupont",
+      number: 12,
+    });
+    expect(player).toMatchObject({ firstName: "", lastName: "Dupont" });
+  });
+
+  it("refuse un nom de famille vide, même avec un prénom", async () => {
     await expect(
-      repos.players.create("local", { firstName: "  ", lastName: "Lovelace" }),
+      repos.players.create("local", { firstName: "Ada", lastName: "  " }),
     ).rejects.toThrow(/invalide/i);
   });
 

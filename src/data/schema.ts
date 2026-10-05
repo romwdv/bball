@@ -156,6 +156,39 @@ export async function migrateV1ToV2(tx: Transaction): Promise<void> {
   }
 }
 
+/**
+ * Schéma v3 — version courante.
+ *
+ * Un seul ajout par rapport à v2 : la colonne `playerIds` sur `matches` (le
+ * roster de ce match, voir `MatchSchema`). Pas d'index, le tableau est lu avec la
+ * ligne. V2 reste inchangé pour que le upgrade v1→v2 continue de se vérifier
+ * isolément.
+ */
+export const V3_SCHEMA = {
+  ...V2_SCHEMA,
+} as const;
+
+/**
+ * Migration v2 → v3 : roster du match.
+ *
+ * Les matchs créés avant cette colonne n'ont pas de roster enregistré. On les
+ * laisse avec `playerIds: []` — vide, pas « tout le roster de l'équipe ».
+ * Raison : un match antidérieur n'a de toute façon aucune action, il faut donc
+ * que le coach fixe lui-même son roster à la reprise. Attribuer le roster
+ * actuel à un match d'il y a trois mois donnerait l'illusion que les
+ * joueurs d'aujourd'hui y ont joué.
+ */
+export async function migrateV2ToV3(tx: Transaction): Promise<void> {
+  await tx
+    .table("matches")
+    .toCollection()
+    .modify((row: Record<string, unknown>) => {
+      if (row.playerIds === undefined) {
+        row.playerIds = [];
+      }
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Base
 // ---------------------------------------------------------------------------
@@ -182,6 +215,7 @@ export class SpaceBunnyDB extends Dexie {
 
     this.version(1).stores(V1_SCHEMA);
     this.version(2).stores(V2_SCHEMA).upgrade(migrateV1ToV2);
+    this.version(3).stores(V3_SCHEMA).upgrade(migrateV2ToV3);
   }
 }
 
