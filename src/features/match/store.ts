@@ -102,6 +102,15 @@ interface MatchStore {
   undoLast: (notice?: Omit<UndoNotice, "id">) => Promise<number>;
   dismissNotice: () => void;
   dismissFlash: () => void;
+  /**
+   * Force la relecture des données.
+   *
+   * Une écriture qui passe par les repositories **sans** passer par `record()` —
+   * clôture d'un match, changement de statut — doit quand même rafraîchir
+   * l'écran. Sans cette action, le composant devrait connaître l'écriture
+   * étrangère et la répliquer, ce qui recollerait deux sources de vérité.
+   */
+  refresh: () => void;
 }
 
 export type HapticKind = "made" | "missed" | "combo" | "neutral";
@@ -218,6 +227,8 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
   dismissNotice: () => set({ notice: null }),
 
   dismissFlash: () => set({ flash: null }),
+
+  refresh: () => set({ revision: get().revision + 1 }),
 }));
 
 /** Périodes, pour le sélecteur du header. Ré-exporté pour n'avoir qu'un import. */

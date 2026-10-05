@@ -1,13 +1,17 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+import type { Action } from "@/domain/types";
 import { CombosBar } from "@/features/match/CombosBar";
 import { FreeThrowSheet } from "@/features/match/FreeThrowSheet";
 import { MatchHeader } from "@/features/match/MatchHeader";
+import { FinishSheet } from "@/features/match/FinishSheet";
+import { MatchSheet } from "@/features/match/MatchSheet";
 import { ActionGrid, AdvancedStatsBar } from "@/features/match/ActionGrid";
 import { PlayerCarousel, useMatchData } from "@/features/match/PlayerCarousel";
 import { useMatchStore } from "@/features/match/store";
+import { repos } from "@/data";
 import { Flash } from "@/ui/Flash";
 import { Toast } from "@/ui/Toast";
 import { useWakeLock } from "@/ui/useWakeLock";
@@ -60,8 +64,42 @@ function MatchScreen() {
   const notice = useMatchStore((state) => state.notice);
   const flash = useMatchStore((state) => state.flash);
   const dismissFlash = useMatchStore((state) => state.dismissFlash);
+  const refresh = useMatchStore((state) => state.refresh);
+
+  /**
+   * Feuille de confirmation de clôture, ou feuille de match en lecture.
+   *
+   * `finished` est dérivé du match rechargé : après `setStatus`, `refresh()`
+   * provoque la relecture et l'écran bascule tout seul en mode lecture. Un état
+   * local dupliquerait la source de vérité.
+   */
+  const [confirming, setConfirming] = useState(false);
 
   const { match, players, statsByPlayer, loading } = useMatchData(matchId);
+
+  /**
+   * Actions actives du match.
+   *
+   * Rechargées quand le match change — donc après la clôture, quand `refresh()`
+   * a provoqué la relecture. Elles servent deux consommateurs : la fiche de
+   * confirmation (lancers dûs, fautes) et la feuille de lecture. Un seul
+   * chargement, sinon la fiche et la feuille verraient des données différentes.
+   */
+  /**
+   * Le match est-il terminé ?
+   *
+   * Dérivé de `match`, jamais stocké : après `setStatus`, `refresh()` provoque
+   * la relecture et l'écran bascule tout seul en mode lecture. Un état local
+   * dupliquerait la source de vérité.
+   */
+  const finished = match?.status === "finished";
+  const [matchActions, setMatchActions] = useState<Action[]>([]);
+  useEffect(() => {
+    if (matchId === null) return;
+    void repos()
+      .actions.listByMatch(matchId, { includeVoided: false })
+      .then(setMatchActions);
+  }, [matchId, match]);
 
   // L'écran ne doit jamais s'éteindre en plein match : le déverrouillage à une
   // main au milieu d'un quart temps est le pire des ratés d'ergonomie.
@@ -136,51 +174,97 @@ function MatchScreen() {
         onSelect={lockPlayer}
       />
 
-      <div className="flex flex-1 flex-col justify-end gap-2 pb-3">
-        <CombosBar playerId={playerId} disabled={noPlayer} onRecord={record} />
-
-        <ActionGrid
-          playerId={playerId ?? ""}
-          playerFouls={
-            playerId === null ? 0 : (statsByPlayer.get(playerId)?.fouls ?? 0)
-          }
-          disabled={noPlayer}
-          onRecord={async (drafts, kind) => {
-            await record(drafts, kind);
-          }}
-        />
-
-        <AdvancedStatsBar
-          playerId={playerId ?? ""}
-          disabled={noPlayer}
-          onRecord={async (drafts, kind) => {
-            await record(drafts, kind);
-          }}
-        />
-
-        <div className="flex gap-2 px-4">
-          <button
-            type="button"
-            onClick={() => {
-              void undoLast({ text: "Dernière action annulée" });
-            }}
-            disabled={noPlayer}
-            className="min-h-tap-min flex-1 rounded-xl border border-edge-strong bg-raised font-medium disabled:opacity-40"
-          >
-            Annuler
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              closeMatch();
-              router.push("/");
-            }}
-            className="min-h-tap-min rounded-xl border border-edge px-4 text-secondary"
-          >
-            Sortir
-          </button>
+      {finished ? (
+        <div className="flex-1 overflow-y-auto px-4 py-4 pb-(--padding-safe-b)">
+          {/* Sans cette sortie, le coach est piégé sur la feuille : la barre
+            de saisie a disparu, et il ne reste que le bouton retour du
+            navigateur — invisible sur une PWA installée. */}
+          <header className="mb-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                closeMatch();
+                router.push("/");
+              }}
+              aria-label="Retour à l'accueil"
+              className="min-h-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
+            >
+              ‹ Accueil
+            </button>
+          </header>
+          <MatchSheet match={match} players={players} actions={matchActions} />
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-1 flex-col justify-end gap-2 pb-3">
+          <CombosBar
+            playerId={playerId}
+            disabled={noPlayer}
+            onRecord={record}
+          />
+
+          <ActionGrid
+            playerId={playerId ?? ""}
+            playerFouls={
+              playerId === null ? 0 : (statsByPlayer.get(playerId)?.fouls ?? 0)
+            }
+            disabled={noPlayer}
+            onRecord={async (drafts, kind) => {
+              await record(drafts, kind);
+            }}
+          />
+
+          <AdvancedStatsBar
+            playerId={playerId ?? ""}
+            disabled={noPlayer}
+            onRecord={async (drafts, kind) => {
+              await record(drafts, kind);
+            }}
+          />
+
+          <div className="flex gap-2 px-4">
+            <button
+              type="button"
+              onClick={() => {
+                void undoLast({ text: "Dernière action annulée" });
+              }}
+              disabled={noPlayer}
+              className="min-h-tap-min flex-1 rounded-xl border border-edge-strong bg-raised font-medium disabled:opacity-40"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              className="min-h-tap-min rounded-xl border border-warning/50 bg-warning-subtle px-4 font-medium text-warning"
+            >
+              Terminer
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeMatch();
+                router.push("/");
+              }}
+              className="min-h-tap-min rounded-xl border border-edge px-4 text-secondary"
+            >
+              Sortir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirming && !finished && (
+        <FinishSheet
+          match={match}
+          players={players}
+          actions={matchActions}
+          onCancel={() => setConfirming(false)}
+          onFinished={() => {
+            setConfirming(false);
+            refresh();
+          }}
+        />
+      )}
 
       {sheet === "free-throws" &&
         playerId !== null &&

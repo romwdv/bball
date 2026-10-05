@@ -599,18 +599,77 @@ rendrait l'écran illisible en bord de terrain. `loading` ne sert qu'au tout pre
 
 ### Phase 4 — Clôture et feuille de match
 
-**Durée** : ~0,5 à 1 jour · **Statut** : ⬜ À faire
+**Durée** : ~0,5 à 1 jour · **Statut** : ✅ Terminée
 
 Objectif : terminer un match proprement et lire le résultat.
 
 Tâches :
 
-- [ ] Action « Terminer le match » avec confirmation
-- [ ] Feuille de match : score total et par période, ligne par joueur
+- [x] Action « Terminer le match » avec confirmation
+- [x] Feuille de match : score total et par période, ligne par joueur
       (`2/6 à 3pts`, `4/8 LF`, fautes, rebonds, passes, pertes, contres, interceptions)
-- [ ] Reprise d'un match en cours au lancement : bandeau « Reprendre le match du 12/03 »
-- [ ] Export CSV et JSON du match
-- [ ] Tests Playwright : créer un match → saisir 10 actions → vérifier le score
+- [x] Reprise d'un match en cours au lancement : bandeau « Reprendre le match du 12/03 »
+      (déjà en place en phase 3, verrouillé par l'E2E ici)
+- [x] Export CSV et JSON du match
+- [x] Tests Playwright : créer un match → saisir 10 actions → vérifier le score
+
+Vérification : `pnpm verify` au vert · **394 tests** + **7 tests E2E** · couverture globale
+98,5 % lignes. Le smoke test Playwright couvre le cycle complet, y compris la clôture et la
+reprise.
+
+#### Quatre décisions prises en cours de route
+
+**1. La clôture verrouille l'écriture, dans la transaction.**
+`append()` refuse d'écrire dans un match terminé, **dans la transaction** : un écran resté
+ouvert pendant la clôture ne peut pas écrire une action dans une feuille déjà lue — sinon les
+stats exportées divergeraient silencieusement de ce que le coach vient de voir. La correction
+passe par « rouvrir » (`setStatus live`), jamais par un contournement. L'undo reste possible
+sur un match terminé : bloquer la suppression empêcherait de corriger une erreur à la relecture.
+
+**2. La fiche de clôture montre les lancers dus AVANT de confirmer.**
+Un lancer oublié découvert après la clôture oblige à rouvrir, resaisir, refermer. La fiche
+compte donc `pendingFreeThrows()` et l'affiche en avertissement — c'est le seul écart réparable
+avant le point de non-retour.
+
+**3. L'export CSV est calibré pour Excel FR, pas pour un standard.**
+Séparateur `;`, BOM UTF-8, fins CRLF. Un CSV à virgules s'ouvre en une seule colonne dans
+Excel FR et le coach ne saura jamais pourquoi. Les valeurs sont échappées : « BC;Nuit »
+casserait la colonne suivante en silence.
+
+**4. Le JSON exporte TOUTES les actions, annulées comprises.**
+Le CSV montre les compteurs ; l'export machine doit permettre de reconstruire l'historique
+exact, y compris ce qui a été défait. C'est la seule façon de garantir qu'un export ne perd
+rien — les stats, elles, sont recalculées sur les actions actives.
+
+#### Le smoke test a trouvé un vrai trou d'UX
+
+L'écran de match terminé n'avait **aucun bouton de sortie** : la barre de saisie disparaît,
+et il ne restait que le bouton retour du navigateur — invisible sur une PWA installée. Le
+coach était piégé sur la feuille. Ajouté « ‹ Accueil » au-dessus de la feuille.
+
+C'est exactement ce que la tâche « smoke test » est censée attraper : un parcours complet,
+pas une page isolée.
+
+#### Notes de mise en œuvre
+
+- **`MatchSheet` est présentationnel** : il reçoit match, roster et actions en props, il ne
+  charge rien. C'est ce qui le rend réutilisable par la phase 5 pour le détail d'un match
+  historique, et testable sans IndexedDB.
+- **Un seul chargement d'actions pour deux consommateurs** : la fiche de confirmation
+  (lancers dûs, fautes) et la feuille de lecture lisent la même liste. Sinon les deux
+  écrans verraient des données différentes.
+- **`refresh()` ajouté au store** : une écriture qui ne passe pas par `record()` — la
+  clôture — doit quand même rafraîchir l'écran. Sinon le composant devrait connaître
+  l'écriture étrangère et la répliquer.
+- **L'écran « fini » n'a pas d'état local** : `finished` est dérivé de `match.status`, et
+  `refresh()` provoque la relecture. Un état local dupliquerait la source de vérité.
+- **Pourcentages d'équipe via `teamTotals`** : `aggregateFor(actions, "team")` filtre par
+  `playerId`, donc une équipe fictive valait tout à zéro — un bug qui ne se voit qu'au
+  premier panier marqué. Attrapé par le test, pas par le type.
+- **Playwright sert `out/` via `scripts/serve.mjs`** : mêmes en-têtes de cache que la
+  production, aucun téléchargement de paquet au premier lancement (`npx --yes serve` le
+  faisait). `pnpm e2e:full` enchaîne build puis test — un E2E sur un build périmé est un
+  faux positif.
 
 ---
 
@@ -714,15 +773,38 @@ Tâches :
 
 ## 7. État actuel
 
-|                         |                                                                             |
-| ----------------------- | --------------------------------------------------------------------------- |
-| **Phase courante**      | Phase 3 — Prototype tactile · **PORTE : test terrain à faire**              |
-| **Prochaine étape**     | Tester sur un vrai téléphone (procédure README §4), puis retour ergonomique |
-| **Dernière action**     | 346 tests · validé en local par le commanditaire · `pnpm verify` au vert    |
-| **Phases terminées**    | Phase 0, Phase 1, Phase 2. Phase 3 code validé en local                     |
-| **Porte de validation** | Phase 3 — reste le test sur téléphone, notamment le geste 400 ms            |
-| **Blocage**             | Aucun technique. Rester : erreurs DNS en local (pare-feu ou isolation AP)   |
-| **Prochaine phase**     | Phase 4 (clôture, feuille de match, export) — après le retour terrain       |
+|                         |                                                                           |
+| ----------------------- | ------------------------------------------------------------------------- |
+| **Phase courante**      | Phase 4 — Clôture et feuille de match · ✅ Terminée                       |
+| **Prochaine étape**     | Phase 5 — historique et stats cumulées (`/history`, `/stats`)             |
+| **Dernière action**     | 394 tests + 7 E2E · `pnpm verify` au vert · smoke Playwright complet      |
+| **Phases terminées**    | Phase 0, Phase 1, Phase 2, Phase 3 (validé en local), Phase 4             |
+| **Porte de validation** | Phase 3 — le test sur téléphone reste à faire, notamment le geste 400 ms  |
+| **Blocage**             | Aucun technique. Rester : erreurs DNS en local (pare-feu ou isolation AP) |
+| **Prochaine phase**     | Phase 5 — historique et stats cumulées                                    |
+
+### Fichiers créés en Phase 4
+
+```
+src/domain/export.ts               matchToCsv() / matchToJson() purs, matchFilename(),
+                                   activeActions() — zéro dépendance à IndexedDB
+src/ui/download.ts                 downloadText() — Blob + lien éphémère, revoke différé
+src/features/match/MatchSheet.tsx  feuille de match : score par période, % d'équipe,
+                                   ligne par joueur, boutons d'export — réutilisable phase 5
+src/features/match/FinishSheet.tsx confirmation de clôture : score, lancers dus, joueurs sortis
+tests/domain/export.test.ts        24 tests — CSV (BOM, ;, CRLF, échappement, Total),
+                                   JSON (score par période, actions annulées incluses)
+tests/features/sheet.test.tsx      20 tests — feuille, export, clôture, réouverture
+tests/e2e/match.spec.ts            7 tests Playwright — cycle complet sur le build statique
+```
+
+### Vérifications effectuées en fin de Phase 4
+
+- `pnpm verify` (typecheck + lint + test + build) → au vert, 4 routes `(Static)`
+- `pnpm test` → 394 tests passés
+- `pnpm test:coverage` → global 98,54 % lignes · 97,65 % stmts · 96,85 % fonctions
+- `pnpm e2e` → 7 tests Playwright au vert sur Chromium mobile, build servi depuis `out/`
+- `pnpm format:check` → conforme
 
 ### Fichiers créés en Phase 3
 
@@ -931,3 +1013,11 @@ Une entrée par tâche ou groupe de tâches. Format : date · phase · quoi · r
 | 2026-10-05 | 3     | 🔴 `awardedFreeThrows()` ignorait l'and-1                                     | Ne renvoyait quelque chose que pour un tir **raté** : `2P+F` n'ouvrait aucune fiche et `pendingFreeThrows()` ne signalait jamais le lancer dû. Désormais 1 lancer après un panier, 2 ou 3 après un tir raté selon sa valeur. Le `undo` d'un and-1 retire panier + faute + lancer d'un bloc                |
 | 2026-10-05 | 3     | `usePress` — bouton désactivé n'enregistre rien                               | Les navigateurs ne dispatchent pas de pointer events sur un `disabled`, mais s'y fier laissait la garantie dépendre du navigateur. Vérification de `currentTarget.disabled` dans le hook, central pour tous les appelants                                                                                 |
 | 2026-10-05 | 3     | `pnpm verify` + couverture                                                    | ✅ 346 tests · global 98,71 % lignes · validé en local par le commanditaire                                                                                                                                                                                                                               |
+| 2026-10-05 | 4     | `src/domain/export.ts` — CSV et JSON purs                                     | Sans dépendance à IndexedDB : testable sans base, réutilisable depuis un tirage cloud. CSV calibré pour Excel FR — séparateur `;`, BOM UTF-8, CRLF ; un CSV à virgules s'ouvre en une seule colonne et le coach ne saura jamais pourquoi                                                                  |
+| 2026-10-05 | 4     | 🔴 `aggregateFor(actions, "team")` valait zéro                                | La fonction filtre par `playerId` : une équipe fictive n'a aucune action. Le pourcentage d'équipe restait à « — » jusqu'au premier panier. Corrigé via `teamTotals`, attrapé par le test et non par le type                                                                                               |
+| 2026-10-05 | 4     | Clôture verrouillée **dans** la transaction                                   | `append()` refuse un match terminé. Un écran resté ouvert ne peut pas écrire dans une feuille déjà lue — sinon les stats exportées divergent silencieusement. La correction passe par « rouvrir », jamais par un contournement                                                                            |
+| 2026-10-05 | 4     | Fiche de clôture : lancers dus affichés avant confirmation                    | Un lancer oublié découvert après clôture oblige à rouvrir, resaisir, refermer. La fiche compte `pendingFreeThrows()` et l'affiche — le seul écart réparable avant le point de non-retour                                                                                                                  |
+| 2026-10-05 | 4     | `refresh()` dans le store                                                     | La clôture n'écrit pas via `record()` : sans action dédiée, l'écran ne se rafraîchit pas ou doit répliquer l'écriture étrangère. L'état « fini » est dérivé de `match.status`, jamais stocké                                                                                                              |
+| 2026-10-05 | 4     | 🔴 E2E : l'écran de match terminé n'avait aucune sortie                       | La barre de saisie disparaît, il ne restait que le bouton retour du navigateur — invisible sur une PWA installée. Le coach était piégé sur la feuille. Ajouté « ‹ Accueil ». C'est exactement ce qu'un smoke test de parcours doit attraper                                                               |
+| 2026-10-05 | 4     | Playwright : `scripts/serve.mjs` remplace `npx --yes serve`                   | Mêmes en-têtes de cache que la production (phase 7), aucun téléchargement de paquet au premier lancement. `pnpm e2e:full` enchaîne build puis test — un E2E sur un build périmé est un faux positif                                                                                                       |
+| 2026-10-05 | 4     | `pnpm verify` + E2E + couverture                                              | ✅ 394 tests · 7 E2E Chromium mobile · global 98,54 % lignes                                                                                                                                                                                                                                              |

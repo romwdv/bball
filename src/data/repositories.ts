@@ -605,8 +605,22 @@ class DexieActionRepository implements ActionRepository {
 
     return this.database.transaction(
       "rw",
-      [this.database.actions, this.database.outbox],
+      [this.database.actions, this.database.outbox, this.database.matches],
       async () => {
+        // Un match terminé n'accepte plus d'action. Sans ce garde-fou, un écran
+        // resté ouvert pendant la clôture écrirait silencieusement une action
+        // dans une feuille déjà lue — et les stats exportées divergeraient de ce
+        // que le coach vient de voir.
+        const currentMatch = await this.database.matches.get(matchId);
+        if (currentMatch === undefined) {
+          throw new Error(`append : match introuvable (${matchId})`);
+        }
+        if (currentMatch.status === "finished") {
+          throw new Error(
+            "append : le match est terminé, rouvrez-le pour corriger",
+          );
+        }
+
         const first = (await lastSeqIn(this.database, matchId)) + 1;
 
         const rows: ActionRow[] = drafts.map((draft, offset) => {

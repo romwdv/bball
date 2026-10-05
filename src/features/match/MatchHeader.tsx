@@ -71,10 +71,17 @@ export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
         ))}
       </div>
 
-      <span className="tabular flex-1 text-center text-2xl font-bold">
-        {score}
+      {/* `data-testid` plutôt qu'un libellé accessible : la valeur est déjà du
+        texte visible et lisible, l'attribut ne sert qu'à cibler le nombre
+        exactement, sans attraper le « 2 » d'un numéro de maillot voisin. */}
+      <span className="tabular flex flex-1 items-baseline justify-center gap-1 text-center">
+        {/* Score et adversaire dans des nœuds séparés : le score est la valeur
+          que le coach lit en premier, et un test ne doit pas avoir à découper
+          « 2 · vs BC Nuit » pour la retrouver. */}
+        <span data-testid="score" className="text-2xl font-bold">
+          {score}
+        </span>
         <span className="text-sm font-normal text-muted">
-          {" "}
           · vs {match.opponentName}
         </span>
       </span>

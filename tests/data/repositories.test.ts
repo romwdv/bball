@@ -1045,3 +1045,62 @@ const DEFAULT_TEAM = {
   name: "Mon équipe",
   ownerId: null,
 };
+
+// ---------------------------------------------------------------------------
+
+describe("garde-fou : match terminé", () => {
+  async function newMatch(): Promise<string> {
+    const match = await repos.matches.create("local", {
+      opponentName: "BC Nuit",
+      date: "2026-10-05",
+    });
+    return match.id;
+  }
+
+  it("refuse d'ajouter une action à un match terminé", async () => {
+    const matchId = await newMatch();
+    await repos.matches.setStatus(matchId, "finished");
+
+    await expect(
+      repos.actions.append(matchId, combos.assist("p1", 1, "g1")),
+    ).rejects.toThrow(/terminé/);
+  });
+
+  it("ne laisse ni action ni entrée d'outbox derrière le refus", async () => {
+    const matchId = await newMatch();
+    await repos.matches.setStatus(matchId, "finished");
+    const before = await repos.actions.countByMatch(matchId);
+
+    await expect(
+      repos.actions.append(matchId, combos.twoMade("p1", 1, "g1")),
+    ).rejects.toThrow(/terminé/);
+
+    // Le garde-fou doit être dans la transaction : un écran resté ouvert ne
+    // doit pas pouvoir écrire à moitié.
+    expect(await repos.actions.countByMatch(matchId)).toBe(before);
+  });
+
+  it("réaccepte les actions après réouverture", async () => {
+    const matchId = await newMatch();
+    await repos.matches.setStatus(matchId, "finished");
+    await expect(
+      repos.actions.append(matchId, combos.assist("p1", 1, "g1")),
+    ).rejects.toThrow(/terminé/);
+
+    await repos.matches.setStatus(matchId, "live");
+    const written = await repos.actions.append(
+      matchId,
+      combos.assist("p1", 1, "g2"),
+    );
+    // La correction passe par « rouvrir », jamais par un contournement.
+    expect(written.actions).toHaveLength(1);
+  });
+
+  it("n'empêche pas la lecture", async () => {
+    const matchId = await newMatch();
+    await repos.actions.append(matchId, combos.twoMade("p1", 1, "g1"));
+    await repos.matches.setStatus(matchId, "finished");
+
+    expect(await repos.actions.listByMatch(matchId)).toHaveLength(1);
+  });
+});

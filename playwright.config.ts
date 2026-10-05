@@ -26,8 +26,10 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        // `npx serve` refuse le dossier vide ; `out/` existe après `pnpm build`.
-        command: "npx --yes serve out -l 3100",
+        // Notre serveur statique plutôt que `npx serve` : mêmes en-têtes de
+        // cache que la production (phase 7), et aucun téléchargement de paquet
+        // au premier lancement du test.
+        command: "node scripts/serve.mjs --port 3100",
         url: "http://127.0.0.1:3100",
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

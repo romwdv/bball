@@ -116,6 +116,9 @@ export function useMatchData(matchId: string | null): MatchData & {
     const store = repos();
     const [found, roster, actions] = await Promise.all([
       store.matches.get(matchId),
+      // Le roster vient du match, pas des actions : un joueur entré sans rien
+      // faire doit apparaître dans la feuille avec une ligne à zéro, sinon il
+      // disparaîtrait du document et le coach croirait à une omission.
       store.matches.rosterOf(matchId),
       store.actions.listByMatch(matchId, { includeVoided: false }),
     ]);
