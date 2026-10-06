@@ -683,20 +683,59 @@ pas une page isolée.
 
 ### Phase 5 — Historique et stats cumulées
 
-**Durée** : ~1 à 1,5 jour · **Statut** : ⬜ À faire
+**Durée** : ~1 à 1,5 jour · **Statut** : ✅ Terminée
 
 Objectif : l'écran « les matchs précédents » et l'écran « mes stats cumulées ».
 
 Tâches :
 
-- [ ] `/history` : matchs terminés + en cours, badge de statut, tri par date
-- [ ] Détail d'un match historique : feuille de match, consultation par période
-- [ ] `/stats` : cumul par joueur — points totaux, points/match, paniers 2P et 3P (réussis/tentés),
+- [x] `/history` : matchs terminés + en cours, badge de statut, tri par date
+- [x] Détail d'un match historique : feuille de match, consultation par période
+- [x] `/stats` : cumul par joueur — points totaux, points/match, paniers 2P et 3P (réussis/tentés),
       % de réussite global et par type, rebonds, passes, pertes, contres, interceptions, fautes
-- [ ] Tri par colonne · filtres
-- [ ] Export CSV des stats cumulées
+- [x] Tri par colonne · filtres
+- [x] Export CSV des stats cumulées
 
-Vérification : les moyennes sont cohérentes avec le total / nombre de matchs (test unitaire).
+Vérification : `pnpm verify` au vert · **424 tests** + 7 E2E · couverture 98,56 % lignes.
+Les moyennes sont vérifiées explicitement : `averages.points === totals.points / matchesPlayed`.
+
+#### Quatre décisions prises en cours de route
+
+**1. Le détail d'un match passe par un query param, pas un segment de chemin.**
+`/history/?m=<uuid>`, pour la même raison que `/match/?m=` : `output: 'export'` interdit les
+routes dynamiques. Deux URLs statiques valent mieux qu'une règle de réécriture Nginx — et c'est
+pour ça que `MatchSheet` a été écrit présentationnel en phase 4, il était déjà prêt à être
+réemployé tel quel.
+
+**2. La période sélectionnée ne filtre que les lignes, jamais le score par période.**
+Filtrer les actions en amont donnerait un bandeau de score à zéro partout ailleurs — un
+mensonge. Le score par période reste donc calculé sur le match entier, tandis que les
+pourcentages et les lignes par joueur portent sur la période consultée. `MatchSheet` reçoit un
+`quarter` optionnel et fait la séparation lui-même.
+
+**3. Le tri par nom reste croissant, même en « décroissant ».**
+Lire une liste de noms à l'envers n'aide personne. Le sens est forcé au croissant pour la seule
+colonne « Joueur », et l'icône de tri reflète ce sens réel — pas l'inverse.
+
+**4. Un joueur sans tentative a un pourcentage vide, pas 0.**
+Le tri le place en fin de classement grâce à une sentinelle `-1`, et l'export laisse la cellule
+vide. Afficher « 0 % » ferait croire à un joueur qui n'a rien raté alors qu'il n'a rien tenté.
+
+#### Notes de mise en œuvre
+
+- **`listByMatches()` ajouté au repository** : sans lui, l'écran des stats cumulées ferait une
+  lecture par match, soit vingt requêtes pour une saison. Un `anyOf` sur l'index `matchId`
+  suffit.
+- **Le tri est extrait en fonction pure** (`sortAndFilter`) plutôt que laissé au tableau :
+  testable sans DOM, et chaque colonne expose sa fonction de tri, ce qui évite de maintenir deux
+  listes de clés qui divergeraient entre le mode « Totaux » et le mode « Par match ».
+- **Un joueur qui n'a joué aucun match n'apparaît pas** dans les statistiques cumulées — le
+  comptage se fait sur les actions distinctes, pas sur la taille de la liste des matchs.
+- **Le toast de `/stats` réutilise le composant `Flash`** de la saisie plutôt qu'un second
+  composant identique : même durée, même style, un seul comportement à maintenir.
+- **Les tests de fixtures ont d'abord été faux, trois fois.** Ada marque 2+3 puis 2 = 7 points,
+  et 2 paniers à 2 points réussis sur 3 tentés. Les attentes écrites à l'estime ont échoué, pas
+  le code — un rappel utile quand un test d'export affiche des chiffres qu'on vient d'inventer.
 
 ---
 
@@ -783,13 +822,34 @@ Tâches :
 
 |                         |                                                                         |
 | ----------------------- | ----------------------------------------------------------------------- |
-| **Phase courante**      | Phase 4 — Clôture et feuille de match · ✅ Terminée                     |
-| **Prochaine étape**     | Phase 5 — historique et stats cumulées (`/history`, `/stats`)           |
-| **Dernière action**     | Déploiement Coolify OK · test sur mobile OK · 394 tests + 7 E2E         |
-| **Phases terminées**    | Phase 0 à Phase 4. **Porte de la phase 3 levée**                        |
+| **Phase courante**      | Phase 5 — Historique et stats cumulées · ✅ Terminée                    |
+| **Prochaine étape**     | Phase 6 — Supabase : auth et synchronisation                            |
+| **Dernière action**     | 424 tests + 7 E2E · `pnpm verify` au vert · couverture 98,56 % lignes   |
+| **Phases terminées**    | Phase 0 à Phase 5. **Porte de la phase 3 levée**                        |
 | **Porte de validation** | ✅ Levée — test sur téléphone via l'URL déployée, pas de retour négatif |
 | **Blocage**             | Aucun. L'accès par IP locale a été contourné par le déploiement HTTPS   |
-| **Prochaine phase**     | Phase 5 — historique et stats cumulées                                  |
+| **Prochaine phase**     | Phase 6 — Supabase : auth et sync                                       |
+
+### Fichiers créés en Phase 5
+
+```
+src/features/history/useHistoryData.ts   tous les matchs de l'équipe, répartis terminés / en cours
+src/features/stats/useCumulativeData.ts  hook de cumul + COLUMNS + sortAndFilter() pur
+src/features/stats/useToastStore.ts     acquittement de l'export, store Zustand isolé
+src/app/history/page.tsx                liste + détail (?m=<uuid>) + sélecteur de période
+src/app/stats/page.tsx                  tableau triable, bascule Totaux / Par match, filtre, CSV
+tests/features/stats.test.tsx           26 tests — cohérence moyennes, tri, filtre, export CSV
+tests/features/history.test.tsx         4 tests — répartition et tri des matchs
+```
+
+### Vérifications effectuées en fin de Phase 5
+
+- `pnpm verify` → au vert, 4 routes `(Static)`
+- `pnpm test` → 424 tests passés
+- `pnpm test:coverage` → global 98,56 % lignes · 97,55 % stmts · 96,95 % fonctions
+- `pnpm e2e` → 7 tests Playwright au vert (le parcours ne touche pas `/history` ni `/stats`,
+  qui sont des écrans de consultation : ils ont leurs propres tests de logique)
+- `pnpm format:check` → conforme
 
 ### Fichiers créés en Phase 4
 
@@ -1029,6 +1089,9 @@ Une entrée par tâche ou groupe de tâches. Format : date · phase · quoi · r
 | 2026-10-05 | 4     | 🔴 E2E : l'écran de match terminé n'avait aucune sortie                       | La barre de saisie disparaît, il ne restait que le bouton retour du navigateur — invisible sur une PWA installée. Le coach était piégé sur la feuille. Ajouté « ‹ Accueil ». C'est exactement ce qu'un smoke test de parcours doit attraper                                                               |
 | 2026-10-05 | 4     | Playwright : `scripts/serve.mjs` remplace `npx --yes serve`                   | Mêmes en-têtes de cache que la production (phase 7), aucun téléchargement de paquet au premier lancement. `pnpm e2e:full` enchaîne build puis test — un E2E sur un build périmé est un faux positif                                                                                                       |
 | 2026-10-05 | 4     | `pnpm verify` + E2E + couverture                                              | ✅ 394 tests · 7 E2E Chromium mobile · global 98,54 % lignes                                                                                                                                                                                                                                              |
+| 2026-10-06 | 5     | `listByMatches()` dans le repository                                          | Un `anyOf` sur l'index `matchId` au lieu d'une lecture par match : vingt requêtes pour une saison, réduites à une. La méthode était identifiée comme manquante dès la phase 2 et était écrite pour ce besoin                                                                                              |
+| 2026-10-06 | 5     | `pnpm verify` + E2E + couverture                                              | ✅ 424 tests · 7 E2E Chromium mobile · global 98,56 % lignes                                                                                                                                                                                                                                              |
+| 2026-10-06 | 5     | `listByMatches()` dans le repository                                          | Un `anyOf` sur l'index `matchId` au lieu d'une lecture par match : vingt requêtes pour une saisonICC réduire à une. La méthode était identifiée comme manquante dès la phase 2, elle était écrite pour ce besoin                                                                                          |
 | 2026-10-06 | 3     | ✅ Porte de validation levée                                                  | Test sur téléphone via l'URL déployée, OK. L'accès par IP locale échouait (pare-feu macOS et/ou bail DHCP renouvelé — l'IP a changé de .106 à .155 en cours de session) ; le déploiement HTTPS rend la question sans objet et confirme en négatif que Safari refuse IndexedDB hors contexte sécurisé      |
 | 2026-10-06 | 4     | 🔴 Coolify : `ERROR packages field missing or empty`                          | `pnpm-workspace.yaml` ne contenait qu'un bloc `allowBuilds`, sans `packages`. pnpm 12 (version locale) l'accepte, pnpm 9 non. Le build de production ne pouvait donc pas fonctionner avec la version de pnpm choisie par défaut sur le serveur                                                            |
 | 2026-10-06 | 4     | `packageManager: pnpm@12.9.1` + `packages: [""."]`                            | Deux couches indépendantes. (1) La version est épinglée : le build utilise le même pnpm que les tests, `--frozen-lockfile` garde son sens. (2) `packages: ["."]` rend le fichier workspace lisible par pnpm 9 **et** 12 : le build survit même si la version épinglée est ignorée                         |

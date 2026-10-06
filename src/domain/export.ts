@@ -3,6 +3,8 @@ import { QUARTERS } from "./types";
 import {
   aggregateFor,
   emptyPlayerStats,
+  totalRebounds,
+  type CumulativeStats,
   type PlayerStats,
   pointsByQuarter,
 } from "./stats";
@@ -182,6 +184,110 @@ export function matchToCsv({
 
   // Le BOM est indispensable : sans lui, Excel FR lit l'UTF-8 en latin-1 et
   // « Lovelace » s'affiche « LovelacÃ© ».
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Export des stats cumulées
+// ---------------------------------------------------------------------------
+
+/**
+ * Colonnes de l'export cumulatif.
+ *
+ * Les réussis **et** les tentés sont exportés en plus des pourcentages : le
+ * coach peut ainsi recalculer exactement ce que l'écran arrondit, au lieu de
+ * faire confiance à un pourcentage qu'il ne peut pas auditer.
+ */
+const CUMULATIVE_COLUMNS = [
+  "N°",
+  "Prénom",
+  "Nom",
+  "Matchs",
+  "Pts",
+  "Pts/M",
+  "2P R",
+  "2P T",
+  "% 2P",
+  "3P R",
+  "3P T",
+  "% 3P",
+  "LF R",
+  "LF T",
+  "% LF",
+  "% Tirs",
+  "Fautes",
+  "Rebonds",
+  "Passes",
+  "Pertes",
+  "Contres",
+  "Interceptions",
+] as const;
+
+export interface CumulativeExportInput {
+  players: readonly Player[];
+  stats: readonly CumulativeStats[];
+  /** Nombre de matchs terminés pris en compte. */
+  matchCount: number;
+}
+
+/**
+ * Un point décimal pour les pourcentages.
+ *
+ * Un décimal là où l'écran arrondit à l'entier : l'export sert à refaire des
+ * calculs, et les réussis/tentés sont dans le fichier de toute façon.
+ */
+function percent(made: number, attempted: number): string {
+  if (attempted === 0) return "";
+  return ((made / attempted) * 100).toFixed(1);
+}
+
+export function cumulativeToCsv({
+  players,
+  stats,
+  matchCount,
+}: CumulativeExportInput): string {
+  const byPlayer = new Map(players.map((player) => [player.id, player]));
+  // Le classement de `cumulativeStats` est conservé : c'est lui qui répond à
+  // « qui marque le plus », et un tableurexpects ses lignes dans cet ordre.
+  const rows = stats.map((entry) => {
+    const player = byPlayer.get(entry.playerId);
+    const total = entry.totals;
+    const attempts2 = total.fgm2 + total.fga2;
+    const attempts3 = total.fgm3 + total.fga3;
+    return csvRow([
+      player?.number ?? null,
+      player?.firstName ?? "",
+      player?.lastName ?? "",
+      entry.matchesPlayed,
+      total.points,
+      entry.averages.points.toFixed(1),
+      total.fgm2,
+      total.fga2,
+      percent(total.fgm2, total.fga2),
+      total.fgm3,
+      total.fga3,
+      percent(total.fgm3, total.fga3),
+      total.ftm,
+      total.fta,
+      percent(total.ftm, total.fta),
+      percent(total.fgm2 + total.fgm3, attempts2 + attempts3),
+      total.fouls,
+      totalRebounds(total),
+      total.assists,
+      total.turnovers,
+      total.steals,
+      total.blocks,
+    ]);
+  });
+
+  const lines = [
+    csvRow(["Stats cumulées", `${matchCount} match(s)`]),
+    csvRow(["Pts/M", "moyenne par match joué"]),
+    "",
+    csvRow([...CUMULATIVE_COLUMNS]),
+    ...rows,
+  ];
+
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 

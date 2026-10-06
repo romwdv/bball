@@ -147,6 +147,21 @@ export interface ActionRepository {
     matchId: string,
     options?: { includeVoided?: boolean },
   ): Promise<ActionRow[]>;
+  /**
+   * Actions de plusieurs matchs, en une lecture.
+   *
+   * exists pour l'écran des stats cumulées : sans elle, il faudrait interroger
+   * la table une fois par match, soit vingt lectures pour une saison. `anyOf`
+   * sur l'index `matchId` suffit — les matchs d'une équipe sont proches en
+   * `updatedAt`, donc la lecture reste peu coûteuse.
+   *
+   * Ordre de sortie : par `matchId` puis `seq`. Le tri final se fait côté
+   * appelant, il n'a pas de sens ici.
+   */
+  listByMatches(
+    matchIds: readonly string[],
+    options?: { includeVoided?: boolean },
+  ): Promise<ActionRow[]>;
   countByMatch(
     matchId: string,
     options?: { activeOnly?: boolean },
@@ -682,6 +697,26 @@ class DexieActionRepository implements ActionRepository {
           includeVoided || row.voidedAt === null || row.voidedAt === undefined,
       )
       .sort((a, b) => a.seq - b.seq);
+  }
+
+  async listByMatches(
+    matchIds: readonly string[],
+    options: { includeVoided?: boolean } = {},
+  ): Promise<ActionRow[]> {
+    if (matchIds.length === 0) return [];
+    const { includeVoided = false } = options;
+
+    const rows = await this.database.actions
+      .where("matchId")
+      .anyOf([...matchIds])
+      .toArray();
+
+    return rows
+      .filter(
+        (row) =>
+          includeVoided || row.voidedAt === null || row.voidedAt === undefined,
+      )
+      .sort((a, b) => a.seq - b.seq || a.matchId.localeCompare(b.matchId));
   }
 
   async countByMatch(

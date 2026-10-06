@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Action, Match, Player } from "@/domain/types";
+import type { Action, Match, Player, Quarter } from "@/domain/types";
 import { QUARTERS, FOUL_LIMIT } from "@/domain/types";
 import {
   aggregateFor,
@@ -32,20 +32,44 @@ import { matchFilename, matchToCsv, matchToJson } from "@/domain/export";
 export interface MatchSheetProps {
   match: Match;
   players: readonly Player[];
+  /** Toutes les actions du match, **annulées exclues**. */
   actions: readonly Action[];
+  /**
+   * Période à consulter, ou `undefined` pour le match entier.
+   *
+   * Le score par période reste calculé sur le match complet — c'est une
+   * information toujours vraie — tandis que les pourcentages et les lignes par
+   * joueur portent sur la période. Filtrer les actions en amont donnerait un
+   * bandeau de score à zéro partout ailleurs, ce qui serait un mensonge.
+   */
+  quarter?: Quarter;
 }
 
-export function MatchSheet({ match, players, actions }: MatchSheetProps) {
+export function MatchSheet({
+  match,
+  players,
+  actions,
+  quarter,
+}: MatchSheetProps) {
   const quarters = useMemo(() => pointsByQuarter(actions, QUARTERS), [actions]);
   const total = quarters.reduce((sum, entry) => sum + entry.points, 0);
+
+  // Les lignes par joueur et les pourcentages suivent la période consultée.
+  const scope = useMemo(
+    () =>
+      quarter === undefined
+        ? actions
+        : actions.filter((action) => action.quarter === quarter),
+    [actions, quarter],
+  );
 
   const rows = useMemo(
     () =>
       players.map((player) => ({
         player,
-        stats: aggregateFor(actions, player.id),
+        stats: aggregateFor(scope, player.id),
       })),
-    [players, actions],
+    [players, scope],
   );
 
   return (
@@ -57,8 +81,13 @@ export function MatchSheet({ match, players, actions }: MatchSheetProps) {
         </p>
       </div>
 
-      <ScoreByQuarter quarters={quarters} total={total} />
-      <TeamShooting actions={actions} />
+      <ScoreByQuarter quarters={quarters} total={total} selected={quarter} />
+      <TeamShooting actions={scope} />
+      {quarter !== undefined && (
+        <p className="text-xs text-muted">
+          Lignes et pourcentages sur la période Q{quarter} uniquement.
+        </p>
+      )}
       <PlayerRows rows={rows} />
       <ExportButtons match={match} players={players} actions={actions} />
     </section>
@@ -68,10 +97,15 @@ export function MatchSheet({ match, players, actions }: MatchSheetProps) {
 interface ScoreByQuarterProps {
   quarters: readonly { quarter: number; points: number }[];
   total: number;
+  selected: Quarter | undefined;
 }
 
-/** Score par période, avec une case vide rendue à 0 : une période à 0 est une information. */
-function ScoreByQuarter({ quarters, total }: ScoreByQuarterProps) {
+/**
+ * Score par période, avec une case vide rendue à 0 : une période à 0 est une
+ * information. La période consultée est mise en avant, pour que la lecture ne
+ * demande pas de recounts les cases.
+ */
+function ScoreByQuarter({ quarters, total, selected }: ScoreByQuarterProps) {
   return (
     // Étiqueté pour le lecteur d'écran : « le score de la période Q2 » se
     // lit sans compter les cases.
@@ -86,7 +120,10 @@ function ScoreByQuarter({ quarters, total }: ScoreByQuarterProps) {
       {quarters.map(({ quarter, points }) => (
         <div
           key={quarter}
-          className="tabular flex flex-1 flex-col items-center gap-1"
+          aria-current={quarter === selected ? "true" : undefined}
+          className={`tabular flex flex-1 flex-col items-center gap-1 rounded-lg ${
+            quarter === selected ? "bg-accent-subtle" : ""
+          }`}
         >
           <span
             className={`text-lg font-semibold ${points === 0 ? "text-muted" : ""}`}
