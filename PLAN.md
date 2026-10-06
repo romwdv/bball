@@ -479,7 +479,7 @@ l'upsert en une opération.
 
 ### Phase 3 — Prototype tactile · PORTE DE VALIDATION
 
-**Durée** : ~1 à 1,5 jour · **Statut** : 🟡 Code terminé, **en attente du test terrain**
+**Durée** : ~1 à 1,5 jour · **Statut** : ✅ Terminée — porte de validation levée le 2026-10-06
 
 Objectif : la saisie en temps réel, testable sur un vrai téléphone. **On s'arrête ici pour ton
 retour ergonomique avant d'écrire la moindre ligne de stats.**
@@ -506,8 +506,16 @@ Tâches :
 - [ ] Recalage du carrousel sur le joueur verrouillé au changement de période
 - [ ] Indicateur de sync réel dans le header (le `⚡` est un placeholder, la phase 6 le branchera)
 
-**PORTE** : tu installes l'app sur ton téléphone, tu simules un match complet, tu me fais un
-retour sur l'ergonomie. **Rien n'est écrit dans les phases suivantes avant ton feu vert.**
+**PORTE** : ✅ **levée le 2026-10-06.** Test sur téléphone via l'URL déployée (`stats.romwdv.fr`),
+OK. L'accès par IP locale échouait (pare-feu macOS et/ou bail DHCP renouvelé — l'IP a changé
+en cours de session) ; le déploiement HTTPS a rendu la question sans objet, ce qui valide au
+passage que **Safari refuse IndexedDB hors contexte sécurisé** : un test réussi en HTTP sur
+Android n'aurait rien prouvé pour iOS.
+
+Un point reste sous surveillance, sans retour négatif à ce jour : le seuil de 400 ms du geste
+tap / appui long est une **estimation**, pas une mesure. Il est isolé dans la constante
+`LONG_PRESS_MS` (`src/ui/usePress.ts`) pour être ajusté en une ligne si un match réel révèle
+que le coach confond les deux gestes.
 
 #### Décisions prises en cours de route
 
@@ -773,15 +781,15 @@ Tâches :
 
 ## 7. État actuel
 
-|                         |                                                                           |
-| ----------------------- | ------------------------------------------------------------------------- |
-| **Phase courante**      | Phase 4 — Clôture et feuille de match · ✅ Terminée                       |
-| **Prochaine étape**     | Phase 5 — historique et stats cumulées (`/history`, `/stats`)             |
-| **Dernière action**     | 394 tests + 7 E2E · `pnpm verify` au vert · smoke Playwright complet      |
-| **Phases terminées**    | Phase 0, Phase 1, Phase 2, Phase 3 (validé en local), Phase 4             |
-| **Porte de validation** | Phase 3 — le test sur téléphone reste à faire, notamment le geste 400 ms  |
-| **Blocage**             | Aucun technique. Rester : erreurs DNS en local (pare-feu ou isolation AP) |
-| **Prochaine phase**     | Phase 5 — historique et stats cumulées                                    |
+|                         |                                                                         |
+| ----------------------- | ----------------------------------------------------------------------- |
+| **Phase courante**      | Phase 4 — Clôture et feuille de match · ✅ Terminée                     |
+| **Prochaine étape**     | Phase 5 — historique et stats cumulées (`/history`, `/stats`)           |
+| **Dernière action**     | Déploiement Coolify OK · test sur mobile OK · 394 tests + 7 E2E         |
+| **Phases terminées**    | Phase 0 à Phase 4. **Porte de la phase 3 levée**                        |
+| **Porte de validation** | ✅ Levée — test sur téléphone via l'URL déployée, pas de retour négatif |
+| **Blocage**             | Aucun. L'accès par IP locale a été contourné par le déploiement HTTPS   |
+| **Prochaine phase**     | Phase 5 — historique et stats cumulées                                  |
 
 ### Fichiers créés en Phase 4
 
