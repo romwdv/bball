@@ -1,3 +1,18 @@
+# Ce dépôt n'est pas un workspace : un seul paquet, à la racine.
+#
+# `packages` est déclaré explicitement, et c'est délibéré. pnpm 9 échoue sur un
+# `pnpm-workspace.yaml` sans ce champ (`ERROR packages field missing or empty`)
+# alors que pnpm 10+ l'accepte. Déclarer `packages: ["."]` rend le fichier
+# valide pour les deux : le build de production ne dépend plus de la version de
+# pnpm installée sur la machine de build.
+#
+# Ne pas supprimer ce fichier sans déplacer `allowBuilds` : pnpm s'y attend.
+packages:
+  - "."
+
+# Dépendances dont le script de build natif ne doit pas s'exécuter.
+# `sharp` et `unrs-resolver` embarquent du code natif ; l'app ne les utilise
+# pas à l'exécution et les compiler alourdirait le build sans bénéfice.
 allowBuilds:
   sharp: false
   unrs-resolver: false

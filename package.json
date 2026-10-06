@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.9.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
     "serve:https": "node scripts/serve.mjs --https",
     "typecheck": "tsc --noEmit",
