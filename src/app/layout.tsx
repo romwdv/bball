@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AuthGate } from "@/features/auth/AuthGate";
 import "./globals.css";
 
 const APP_NAME = "Stats Basket";
@@ -39,8 +40,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr" className="h-full antialiased">
+      {/* Le garde-fou d'accès enveloppe *toutes* les routes, pas seulement `/` :
+          `output: 'export'` interdit le verrouillage côté serveur, donc le seul
+          endroit exhaustif est le composant racine. */}
       <body className="flex h-full min-h-0 flex-col bg-base text-primary">
-        {children}
+        <AuthGate>{children}</AuthGate>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import type { MatchRow } from "@/data/schema";
 import type { PlayerStats } from "@/domain/stats";
 import { useMatchStore } from "@/features/match/store";
 import { formatDate } from "@/features/match/formatDate";
+import { SyncIndicator } from "@/features/sync/SyncIndicator";
 
 /**
  * Header compact : période, score, annulations, synchronisation.
@@ -74,7 +75,13 @@ export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
       {/* `data-testid` plutôt qu'un libellé accessible : la valeur est déjà du
         texte visible et lisible, l'attribut ne sert qu'à cibler le nombre
         exactement, sans attraper le « 2 » d'un numéro de maillot voisin. */}
-      <span className="tabular flex flex-1 items-baseline justify-center gap-1 text-center">
+      <span
+        className="tabular flex flex-1 items-baseline justify-center gap-1 text-center"
+        // La date et le statut n'ont pas de place dans le header : ils restent
+        // accessibles au survol, où le coach les cherche s'il reprend un match
+        // d'il y a trois semaines.
+        title={`${formatDate(match.date)} · ${match.status}`}
+      >
         {/* Score et adversaire dans des nœuds séparés : le score est la valeur
           que le coach lit en premier, et un test ne doit pas avoir à découper
           « 2 · vs BC Nuit » pour la retrouver. */}
@@ -86,18 +93,15 @@ export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
         </span>
       </span>
 
-      <span
-        className="shrink-0 text-xs"
-        title={`${formatDate(match.date)} · ${match.status}`}
-      >
-        {pendingFreeThrows > 0 ? (
-          <span className="rounded-full bg-warning-subtle px-2 py-1 text-warning">
-            LF {pendingFreeThrows}
-          </span>
-        ) : (
-          <span className="text-muted">⚡</span>
-        )}
-      </span>
+      {/* Le compteur de lancers dus ne disparaît jamais : il signale une fiche de
+          saisie ouverte, qui bloque le reste de la grille. */}
+      {pendingFreeThrows > 0 && (
+        <span className="shrink-0 rounded-full bg-warning-subtle px-2 py-1 text-xs text-warning">
+          LF {pendingFreeThrows}
+        </span>
+      )}
+
+      <SyncIndicator />
     </header>
   );
 }

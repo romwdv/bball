@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { repos } from "@/data";
 import type { MatchRow } from "@/data/schema";
-import { LOCAL_TEAM_ID } from "@/data/repositories";
 import { MatchStatus } from "@/domain/types";
 import { formatDate } from "@/features/match/formatDate";
+import { useAuthStore } from "@/features/auth/store";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
@@ -33,14 +33,21 @@ interface HomeData {
 
 export default function HomePage() {
   const router = useRouter();
+  const signOut = useAuthStore((state) => state.signOut);
+  const busy = useAuthStore((state) => state.busy);
+  const email = useAuthStore((state) => state.session?.email ?? null);
 
   const load = useCallback(async (): Promise<HomeData> => {
     const store = repos();
-    const existed = await store.teams.get(LOCAL_TEAM_ID);
+    // L'équipe n'est plus identifiée par une constante : après la première
+    // connexion, `claimTeam()` lui a donné un `uuid` (la constante `"local"`
+    // n'est pas un identifiant acceptable par le cloud, et elle serait la même
+    // sur tous les appareils). « Existe-t-elle ? » se demande donc au store.
+    const existing = await store.teams.list();
     const team = await store.teams.ensureLocal();
     return {
       unfinished: await store.matches.listUnfinished(team.id),
-      recreated: existed === undefined,
+      recreated: existing.length === 0,
     };
   }, []);
 
@@ -53,7 +60,7 @@ export default function HomePage() {
       <header className="pt-4">
         <h1 className="text-2xl font-semibold">Matchs</h1>
         <p className="mt-1 text-sm text-secondary">
-          Saisie hors-ligne, synchronisée plus tard.
+          Saisie hors-ligne, synchronisée dès que le réseau revient.
         </p>
       </header>
 
@@ -133,6 +140,28 @@ export default function HomePage() {
           Stats cumulées
         </Link>
       </nav>
+
+      {/*
+        Déconnexion, volontairement discrète et tout en bas de l'écran.
+
+        L'écran d'accueil est le seul endroit qui soit à la fois accessible au
+        repos et sans risque : se déconnecter au milieu d'un match laisserait une
+        saisie non synchronisée, donc la sortie de session n'a pas sa place dans
+        le header de saisie.
+      */}
+      <footer className="flex items-center justify-between gap-3 pb-2">
+        <span className="truncate text-xs text-muted">{email}</span>
+        <button
+          type="button"
+          onClick={() => {
+            void signOut();
+          }}
+          disabled={busy}
+          className="min-h-tap-min shrink-0 rounded-lg border border-edge px-3 text-xs text-secondary disabled:opacity-50"
+        >
+          Déconnexion
+        </button>
+      </footer>
     </main>
   );
 }

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -7,6 +8,19 @@ import { defineConfig, devices } from "@playwright/test";
  * L'app est un build statique : on sert `out/` plutôt que de lancer `next dev`,
  * ce qui vérifie réellement le comportement en production (et plus tard l'offline).
  */
+/*
+ * `.env.local` est chargé ici, et nowhere else dans la configuration de test.
+ *
+ * `NEXT_PUBLIC_SUPABASE_URL` est figée au **build** par Next, donc le bundle
+ * servi par `out/` connaît le vrai nom de projet — et `supabase-js` en déduit sa
+ * clé de stockage, `sb-<projet>-auth-token`. Sans la même valeur côté test, la
+ * session amorcée arriverait sous une autre clé et l'app resterait à l'écran de
+ * connexion. Un seul endroit à mettre à jour, donc pas de divergence possible.
+ */
+if (existsSync(".env.local")) {
+  process.loadEnvFile(".env.local");
+}
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,

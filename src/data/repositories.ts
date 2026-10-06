@@ -42,7 +42,14 @@ import { undoScope } from "@/domain/undo";
 // ---------------------------------------------------------------------------
 
 export interface TeamRepository {
-  /** Crée l'équipe locale et la retourne. Idempotent. */
+  /**
+   * Crée l'équipe locale si elle n'existe pas, et la retourne. Idempotent.
+   *
+   * L'identifiant n'est plus une constante : avant la première connexion c'est
+   * `LOCAL_TEAM_ID` (`"local"`), et après `claimTeam()` c'est un `uuid` propre à
+   * ce compte. La méthode cherche donc *une* équipe, pas *une* équipe d'un
+   * identifiant donné — l'appareil ne gère qu'une équipe, par construction.
+   */
   ensureLocal(name?: string): Promise<TeamRow>;
   get(id: string): Promise<TeamRow | undefined>;
   list(): Promise<TeamRow[]>;
@@ -221,7 +228,7 @@ class DexieTeamRepository implements TeamRepository {
   constructor(private readonly database: SpaceBunnyDB) {}
 
   async ensureLocal(name: string = DEFAULT_TEAM_NAME): Promise<TeamRow> {
-    const existing = await this.database.teams.get(LOCAL_TEAM_ID);
+    const existing = await this.onlyTeam();
     if (existing !== undefined) return existing;
 
     const now = Date.now();
@@ -239,7 +246,7 @@ class DexieTeamRepository implements TeamRepository {
       async () => {
         // Relecture sous transaction : deux appels concurrents au premier
         // lancement ne doivent pas créer deux équipes locales.
-        const raced = await this.database.teams.get(LOCAL_TEAM_ID);
+        const raced = await this.onlyTeam();
         if (raced !== undefined) return;
         await this.database.teams.put(row);
         await enqueue(this.database, {
@@ -252,6 +259,17 @@ class DexieTeamRepository implements TeamRepository {
     );
 
     return row;
+  }
+
+  /**
+   * L'équipe de l'appareil, quel que soit son `id`.
+   *
+   * Une seule ligne est attendue : le store ne gère qu'une équipe, et
+   * `claimTeam()` ne fait que changer son identité. La lecture se fait par la clé
+   * primaire plutôt que par `where("id")`, donc l'index primaire suffit.
+   */
+  private async onlyTeam(): Promise<TeamRow | undefined> {
+    return this.database.teams.toCollection().first();
   }
 
   async get(id: string): Promise<TeamRow | undefined> {

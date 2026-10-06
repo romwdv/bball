@@ -35,11 +35,24 @@ export default function NewMatchPage() {
   const [quickNumber, setQuickNumber] = useState("");
   const [quickName, setQuickName] = useState("");
 
+  /**
+   * Identifiant de l'équipe, mémorisé au chargement.
+   *
+   * Il ne peut plus être une constante : depuis la phase 6, `claimTeam()` donne
+   * à l'équipe un `uuid` propre au compte, et le joueur ajouté par la forme
+   * rapide doit porter **ce** `teamId`. Avec l'ancienne constante, ce joueur
+   * était écrit sous `"local"` : invisible dans le roster affiché, absent de
+   * l'historique, et jamais synchronisé. Un bug invisible jusqu'au premier
+   * remplaçant ajouté en bord de terrain.
+   */
+  const [teamId, setTeamId] = useState<string | null>(null);
+
   useEffect(() => {
     void (async () => {
       const store = repos();
       const team = await store.teams.ensureLocal();
       const players = await store.players.listByTeam(team.id);
+      setTeamId(team.id);
       setRoster(players);
       // Tout coché par défaut : cf. justification en tête de fichier.
       setSelected(new Set(players.map((player) => player.id)));
@@ -67,13 +80,18 @@ export default function NewMatchPage() {
     const [first, ...rest] = name.split(/\s+/);
     const parsed = Number.parseInt(quickNumber, 10);
 
+    if (teamId === null) {
+      setError("Roster en cours de chargement.");
+      return;
+    }
+
     try {
       // « Dupont » seul : c'est le cas le plus fréquent en bord de terrain, et
       // le nom complet n'est pas connu de tout le monde. Le premier mot part
       // donc dans `lastName` — convention française, et c'est le nom que le
       // coach cherche dans le carrousel.
       const single = rest.length === 0;
-      const created = await repos().players.create(LOCAL_TEAM, {
+      const created = await repos().players.create(teamId ?? "", {
         firstName: single ? "" : (rest.join(" ") ?? ""),
         lastName: single ? (first ?? name) : (first ?? ""),
         number: Number.isNaN(parsed) ? null : parsed,
@@ -281,8 +299,6 @@ export default function NewMatchPage() {
  */
 const INPUT_CLASS =
   "min-h-tap-min rounded-xl border border-edge bg-raised text-base text-primary outline-none placeholder:text-muted focus:border-accent";
-
-const LOCAL_TEAM = "local";
 
 /**
  * Tri du roster affiché : numéros croissants, sans numéro à la fin.

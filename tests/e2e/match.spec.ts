@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { signIn } from "./auth";
 
 /**
  * Parcours de bout en bout, sur le build statique et un vrai navigateur.
@@ -19,6 +20,7 @@ const PLAYER_NUMBER = "4";
 async function createMatch(
   page: import("@playwright/test").Page,
 ): Promise<void> {
+  await signIn(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Nouveau match" }).click();
   await page.getByLabel("Adversaire").fill("BC Nuit");
@@ -141,6 +143,7 @@ test.describe("parcours complet", () => {
   });
 
   test("ajoute un joueur à un seul nom", async ({ page }) => {
+    await signIn(page);
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("Étoile Béziers");
@@ -158,5 +161,44 @@ test.describe("parcours complet", () => {
 
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
+  });
+});
+
+test.describe("garde-fou d'accès", () => {
+  test("bloque la saisie sans session", async ({ page }) => {
+    // La contrepartie obligatoire de tous les autres tests : ceux-ci amorcent
+    // une session, il faut prouver que son absence verrouille vraiment l'app.
+    await page.route(/supabase\.co\/(rest|auth)\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      }),
+    );
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+    // Ni la grille de saisie, ni la création de match : l'app est verrouillée,
+    // pas simplement redirigée.
+    await expect(
+      page.getByRole("button", { name: "Nouveau match" }),
+    ).toHaveCount(0);
+    await expect(page.getByTestId("score")).toHaveCount(0);
+  });
+
+  test("reste verrouillé sur une route de saisie", async ({ page }) => {
+    await page.route(/supabase\.co\/(rest|auth)\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      }),
+    );
+    // URL directe vers un match : le verrou ne peut pas dépendre du chemin suivi
+    // pour arriver à l'écran de saisie.
+    await page.goto("/match/?m=00000000-0000-4000-8000-000000000002");
+
+    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+    await expect(page.getByTestId("score")).toHaveCount(0);
   });
 });
