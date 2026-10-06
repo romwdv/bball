@@ -6,7 +6,7 @@
   "packageManager": "pnpm@12.9.1",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/make-icons.mjs && next build && node scripts/make-precache-manifest.mjs",
     "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
     "serve:https": "node scripts/serve.mjs --https",
@@ -19,7 +19,8 @@
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
     "e2e:full": "pnpm build && playwright test",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

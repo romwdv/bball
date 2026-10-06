@@ -152,6 +152,9 @@ propre :
   vert au pressage) prend le relais. Sur Android, ça doit vibrer.
 - **[ ]Les encoches.** Le header et la barre de combos ne doivent pas passer
   sous l'encoche ni la barre d'actions. C'est le rôle de `env(safe-area-inset-*)`.
+- **[ ] L'installation.** Sur Android, l'invite doit apparaître sur l'accueil et
+  ouvrir le dialogue natif. Sur iOS, « Partager → Sur l'écran d'accueil », puis
+  vérifier que l'app s'ouvre **en plein écran, sans barre d'adresse**.
 - **[ ] Le compte.** Créer un compte, vérifier que l'app s'ouvre, puis créer un
   match et regarder le voyant en haut de l'écran de saisie passer de
   « n en attente » à « synchronisé ». Couper le réseau pendant une saisie : le
@@ -168,11 +171,13 @@ propre :
 
 ### 6. Ce que les tests automatisés couvrent déjà
 
-536 tests, 98 % de couverture. Le geste tap/appui long, les combos, l'annulation
-groupée, la cohérence avec les statistiques, le moteur de synchronisation (perte
-de données, ordre de dépendance, curseurs par table, backoff) et le rattachement
-des données locales au compte sont testés. **Si le test terrain ne valide que
-l'ergonomie et le rendu, la logique est déjà sous contrôle.**
+563 tests, 98 % de couverture, 18 tests Playwright. Le geste tap/appui long, les
+combos, l'annulation groupée, la cohérence avec les statistiques, le moteur de
+synchronisation (perte de données, ordre de dépendance, curseurs par table,
+backoff), le rattachement des données locales au compte, le manifeste de
+pré-cache, les cibles tactiles et les contrastes AA sont testés. **Si le test
+terrain ne valide que l'ergonomie et le rendu, la logique est déjà sous
+contrôle.**
 
 Les tests E2E amorcent une session factice dans `localStorage` et coupent les
 appels réseau vers Supabase (`tests/e2e/auth.ts`) : aucun compte réel, aucune
@@ -181,11 +186,76 @@ et indépendants du réseau.
 
 ---
 
+## PWA et mode hors-ligne
+
+L'application s'installe sur l'écran d'accueil et **fonctionne sans réseau**.
+C'est une promesse centrale : un gymnase n'a pas de couverture fiable.
+
+### Ce qui a été fait
+
+- **Manifeste** (`src/app/manifest.json`) : nom, `standalone`, orientation
+  portrait, couleurs de thème, trois icônes dont une `maskable`.
+- **Icônes générées** (`scripts/make-icons.mjs`) — un ballon de basket dessiné
+  par le code, PNG et ICO écrits à la main sans dépendance. Régénérées à chaque
+  `pnpm build`, donc elles ne peuvent pas diverger du thème.
+- **Service worker** (`public/sw.js`) : `cache-first` sur les assets hashés,
+  `network-first` sur les navigations avec repli sur le cache, `skipWaiting` pour
+  qu'une nouvelle version prenne la place sans attendre la fermeture de toutes les
+  fenêtres, purge des anciens caches à l'activation.
+- **Pré-cache** (`scripts/make-precache-manifest.mjs`) : la liste exacte des
+  fichiers, révisionnée par hash des contenus. Un déploiement sans changement ne
+  force donc pas le coach à retélécharger quoi que ce soit.
+- **Page `/~offline`** : atteinte seulement pour une URL inconnue sans réseau.
+  Elle dit ce qui reste utilisable, et n'affiche aucun bouton qui échouerait.
+- **Invite à installer** : dialogue natif sur Android, marche à suivre sur iOS —
+  aucune API n'y existe, seul le coach peut faire Partager → Sur l'écran d'accueil.
+
+### Vérifier le hors-ligne
+
+Le test est automatisé et tourne à chaque `pnpm e2e` :
+
+```bash
+pnpm build && pnpm e2e
+```
+
+Il coupe le réseau, recharge, retrouve le match en cours **avec son score**,
+saisit une action, recharge encore — et la score est toujours là.
+
+Pour le vérifier à la main, après `pnpm build && pnpm serve` :
+
+1. ouvrir l'app, créer un match, saisir quelques actions ;
+2. attendre que le service worker soit installé (DevTools → Application) ;
+3. passer en mode avion ;
+4. **recharger** la page — pas seulement naviguer dedans ;
+5. retrouver le match, son score, et en saisir un autre.
+
+### Nginx
+
+La configuration complète est dans **`deploy/nginx.conf`**. Le point critique :
+
+> **`sw.js` et `sw-precache-manifest.json` doivent être servis en `no-cache`.**
+> Sinon le navigateur met le service worker à jour en arrière-plan mais ne
+> l'exécute qu'au **prochain** chargement — le coach passerait le reste de la
+> saison sur une version antérieure, avec un pré-cache d'une autre version.
+
+Les assets sous `/_next/static/` portent leur hash de contenu : ils peuvent être
+servis `immutable` pendant un an. Le HTML, lui, est toujours revalidé, sinon il
+pointerait vers un bundle supprimé.
+
+### Limite connue
+
+Sur **iOS**, Safari réserve 50 Mo au cache par domaine, et vide ce qui dépasse
+sans prévenir. L'application tient largement dedans, mais c'est une contrainte du
+navigateur, pas du code.
+
+---
+
 ## Commandes
 
 ```bash
 pnpm dev          # serveur de dev (ne pas utiliser pour valider)
-pnpm build        # build statique dans out/
+pnpm build        # icônes + build statique dans out/ + manifeste de pré-cache
+pnpm icons        # régénère les icônes seules
 pnpm serve        # sert out/ en HTTP, affiche les URLs LAN
 pnpm serve:https  # idem en HTTPS, certificats mkcert dans .certs/
 pnpm verify       # typecheck + lint + test + build  ← avant chaque commit
@@ -198,12 +268,14 @@ pnpm e2e          # Playwright, mobile viewport
 
 Next.js 16 (App Router, `output: 'export'`) · React 19 · TypeScript strict ·
 Tailwind v4 · Dexie 4 (IndexedDB) · Zustand 5 · Zod 4 · Supabase 2 ·
-Vitest 5 · Playwright.
+Vitest 5 · Playwright. Service worker et icônes écrits à la main, sans
+bibliothèque de PWA.
 
 ## Déploiement
 
-Push depuis GitHub sur Coolify, build statique servi par Nginx. Voir `PLAN.md`
-§7 pour la config Nginx.
+Push depuis GitHub sur Coolify, build statique servi par Nginx. La configuration
+Nginx complète est dans **`deploy/nginx.conf`**, à copier dans le panneau
+Coolify ou à monter dans le conteneur Nginx.
 
 Sur Coolify, les deux variables `NEXT_PUBLIC_*` se déclarent dans les
 **variables d'environnement de l'application**. Rappel : elles sont lues au

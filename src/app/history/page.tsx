@@ -63,7 +63,7 @@ function MatchList() {
         <Link
           href="/"
           aria-label="Retour à l’accueil"
-          className="min-h-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
+          className="min-h-tap-min min-w-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
         >
           ‹
         </Link>
@@ -189,7 +189,7 @@ function MatchDetail({ matchId }: { matchId: string }) {
           type="button"
           onClick={() => router.push("/history/")}
           aria-label="Retour à l&rsquo;historique"
-          className="min-h-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
+          className="min-h-tap-min min-w-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
         >
           ‹
         </button>

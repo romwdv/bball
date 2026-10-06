@@ -70,7 +70,7 @@ export default function StatsPage() {
         <Link
           href="/"
           aria-label="Retour à l'accueil"
-          className="min-h-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
+          className="min-h-tap-min min-w-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
         >
           ‹
         </Link>

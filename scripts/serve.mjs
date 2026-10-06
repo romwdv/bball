@@ -29,7 +29,15 @@ import { readFile } from "node:fs/promises";
 import { createServer as createHttp } from "node:http";
 import { createServer as createHttps } from "node:https";
 import { networkInterfaces } from "node:os";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  join,
+  normalize,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "out");
@@ -85,8 +93,24 @@ const MIME = {
  * permettrait de servir une page qui pointe vers un bundle supprimé. Le manifeste et
  * le service worker suivent la même règle, sinon une nouvelle version peut ne
  * jamais être vue.
+ *
+ * `sw.js` est le cas le plus important : le navigateur le met à jour en arrière-plan
+ * et ne l'exécute qu'au **prochain** chargement. Le servir en cache, c'est
+ * garantir que le coach utilise un service worker d'une version antérieure pour
+ * le reste de la saison — avec le pré-cache d'une autre version, donc des
+ * requêtes qui échouent.
  */
 const NEVER_CACHED = new Set([".html", ".webmanifest", ".js.map"]);
+
+/**
+ * Fichiers en cache court, relus à chaque visite.
+ *
+ * `manifest.webmanifest` est déjà couvert par `NEVER_CACHED`. `manifest.json` ne
+ * l'est pas, parce que ce fichier est généré par Next en route statique et non
+ * déposé dans `public/` : son extension ne dit rien de son importance. Le nom,
+ * lui, est explicite — d'où une liste plutôt qu'un test sur l'extension.
+ */
+const SHORT_CACHED = new Set(["sw-precache-manifest.json"]);
 
 /** @param {string} path */
 function contentType(path) {
@@ -95,6 +119,12 @@ function contentType(path) {
 
 /** @param {string} path */
 function cacheControl(path) {
+  const name = basename(path).toLowerCase();
+
+  // `sw.js` et le manifeste de pré-cache sont servis en `no-cache` : le premier
+  // doit pouvoir se mettre à jour en arrière-plan, le second change à chaque
+  // build. Voir `NEVER_CACHED` et `SHORT_CACHED`.
+  if (name === "sw.js" || SHORT_CACHED.has(name)) return "no-cache";
   if (NEVER_CACHED.has(extname(path).toLowerCase())) return "no-cache";
   // Les assets Next sont sous `/_next/static/` et leur nom contient le hash de
   // leur contenu : ils peuvent être mis en cache indéfiniment.

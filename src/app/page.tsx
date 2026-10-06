@@ -8,6 +8,7 @@ import type { MatchRow } from "@/data/schema";
 import { MatchStatus } from "@/domain/types";
 import { formatDate } from "@/features/match/formatDate";
 import { useAuthStore } from "@/features/auth/store";
+import { InstallPrompt } from "@/features/pwa/InstallPrompt";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
@@ -140,6 +141,14 @@ export default function HomePage() {
           Stats cumulées
         </Link>
       </nav>
+
+      {/*
+        Invite à installer, juste au-dessus de la navigation : c'est le dernier
+        endroit de l'écran où elle ne masque aucun contenu, et le premier que le
+        coach voit sans avoir à faire défiler. L'écran d'accueil est aussi le seul
+        moment pertinent — pendant un match, personne n'installe une application.
+      */}
+      <InstallPrompt />
 
       {/*
         Déconnexion, volontairement discrète et tout en bas de l'écran.

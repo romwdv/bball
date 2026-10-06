@@ -44,7 +44,7 @@ export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
           void undoLast({ text: "Dernière action annulée" });
         }}
         aria-label="Annuler la dernière action"
-        className="min-h-tap-min shrink-0 rounded-lg border border-edge px-3 text-sm"
+        className="min-h-tap-min min-w-tap-min shrink-0 rounded-lg border border-edge px-3 text-sm"
       >
         ↶
       </button>
@@ -61,7 +61,12 @@ export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
             role="tab"
             aria-selected={value === quarter}
             onClick={() => setQuarter(value as Quarter)}
-            className={`tabular min-h-tap-min w-8 text-sm font-semibold transition-colors ${
+            // `w-11` = 44 px : la largeur du sélecteur de période est mesurée, pas
+          // supposée. En `w-8` (32 px) les quatre onglets ne respectaient pas la
+          // cible tactile minimale, alors que c'est le seul élément du header
+          // réellement pressé en match — passer de Q1 à Q2 arrive quelques fois
+          // par rencontre.
+          className={`tabular min-h-tap-min w-11 text-sm font-semibold transition-colors ${
               value === quarter
                 ? "bg-accent text-inverse"
                 : "bg-raised text-secondary"

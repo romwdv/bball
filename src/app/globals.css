@@ -21,7 +21,15 @@
   /* Texte */
   --text-primary: #f2f5f9;
   --text-secondary: #a9b4c4;
-  --text-muted: #6b7688;
+  /* Texte tertiaire : dates, aides, compteurs.
+   *
+   * La valeur est le résultat d'un audit WCAG AA **mesuré**, pas d'un calcul à
+   * l'œil : `#6b7688` ne tenait que 3,77:1 sur les cartes (`--surface-raised`),
+   * sous le seuil de 4,5:1 exigé pour du texte courant. Claircie vers `#7b889c`,
+   * elle atteint 4,82:1 sur une carte et 5,35:1 sur le fond — avec la même teinte,
+   * donc sans casser la hiérarchie visuelle. Vérifié par `tests/e2e/contrast.spec.ts`.
+   */
+  --text-muted: #7b889c;
   --text-inverse: #0b0f14;
 
   /* Accent */
