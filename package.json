@@ -6,7 +6,7 @@
   "packageManager": "pnpm@12.9.1",
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/make-icons.mjs && next build && node scripts/make-precache-manifest.mjs",
+    "build": "node scripts/make-icons.mjs && next build && node scripts/make-precache-manifest.mjs && node scripts/check-bundle.mjs",
     "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
     "serve:https": "node scripts/serve.mjs --https",
@@ -20,7 +20,9 @@
     "e2e": "playwright test",
     "e2e:full": "pnpm build && playwright test",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "bundle": "node scripts/check-bundle.mjs",
+    "bundle:detail": "BUNDLE_REPORT=1 node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
@@ -51,5 +53,13 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.3"
-  }
+  },
+  "browserslist": [
+    "last 2 iOS versions",
+    "iOS >= 15.4",
+    "last 2 Chrome versions",
+    "last 2 Android versions",
+    "last 2 Edge versions",
+    "last 2 Firefox versions"
+  ]
 }

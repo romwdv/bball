@@ -171,7 +171,7 @@ propre :
 
 ### 6. Ce que les tests automatisés couvrent déjà
 
-563 tests, 98 % de couverture, 18 tests Playwright. Le geste tap/appui long, les
+563 tests, 98 % de couverture, 19 tests Playwright. Le geste tap/appui long, les
 combos, l'annulation groupée, la cohérence avec les statistiques, le moteur de
 synchronisation (perte de données, ordre de dépendance, curseurs par table,
 backoff), le rattachement des données locales au compte, le manifeste de
@@ -229,18 +229,8 @@ Pour le vérifier à la main, après `pnpm build && pnpm serve` :
 4. **recharger** la page — pas seulement naviguer dedans ;
 5. retrouver le match, son score, et en saisir un autre.
 
-### Nginx
-
-La configuration complète est dans **`deploy/nginx.conf`**. Le point critique :
-
-> **`sw.js` et `sw-precache-manifest.json` doivent être servis en `no-cache`.**
-> Sinon le navigateur met le service worker à jour en arrière-plan mais ne
-> l'exécute qu'au **prochain** chargement — le coach passerait le reste de la
-> saison sur une version antérieure, avec un pré-cache d'une autre version.
-
-Les assets sous `/_next/static/` portent leur hash de contenu : ils peuvent être
-servis `immutable` pendant un an. Le HTML, lui, est toujours revalidé, sinon il
-pointerait vers un bundle supprimé.
+> **`sw.js` doit être servi en `no-cache`.** Voir [Déploiement → Nginx](#nginx) :
+> c'est le piège le plus coûteux de la mise en production.
 
 ### Limite connue
 
@@ -254,8 +244,7 @@ navigateur, pas du code.
 
 ```bash
 pnpm dev          # serveur de dev (ne pas utiliser pour valider)
-pnpm build        # icônes + build statique dans out/ + manifeste de pré-cache
-pnpm icons        # régénère les icônes seules
+pnpm build        # icônes + build statique + pré-cache + budget de bundle
 pnpm serve        # sert out/ en HTTP, affiche les URLs LAN
 pnpm serve:https  # idem en HTTPS, certificats mkcert dans .certs/
 pnpm verify       # typecheck + lint + test + build  ← avant chaque commit
@@ -264,6 +253,86 @@ pnpm test:coverage
 pnpm e2e          # Playwright, mobile viewport
 ```
 
+Outils de build, appelables seuls :
+
+```bash
+pnpm icons           # régénère les icônes (fait aussi par pnpm build)
+pnpm bundle          # vérifie le budget de bundle
+pnpm bundle:detail   # idem, avec le détail par fichier
+```
+
+### Budget de bundle
+
+`pnpm build` **échoue** si le premier écran dépasse 400 ko gzippés, ou le
+JavaScript total 500 ko. Les seuils sont dans `scripts/check-bundle.mjs`.
+
+Un budget qui n'échoue pas ne protège de rien : la régression arrive par un
+`import` oublié ou une mise à jour de dépendance, et personne ne la voit avant
+que le coach attende trente secondes à l'ouverture, en gymnase.
+
+La mesure porte sur le **premier écran** — les ressources référencées par le
+HTML de l'accueil, gzippées — parce que c'est ce que le téléphone attend
+réellement. `pnpm bundle:detail` affiche le détail par fichier.
+
+---
+
+## Déploiement
+
+### Coolify
+
+Push depuis GitHub, build sur le serveur, service statique servi par Nginx.
+
+**Variables d'environnement de l'application** (elles sont lues **au build**) :
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<projet>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+Modifier ces variables déclenche un redéploiement, pas un simple redémarrage.
+
+**Commande de build** : `pnpm build`
+**Commande de démarrage** : `pnpm start`
+
+`next start` est incompatible avec `output: 'export'` — le projet sert donc
+`out/` via `scripts/serve.mjs`, qui lit `PORT` et `HOST` comme l'attend Railpack.
+
+### Nginx
+
+Copier **`deploy/nginx.conf`** dans le panneau Coolify, ou monter le fichier dans
+le conteneur Nginx. Adapter `server_name` et l'origine Supabase dans la CSP.
+
+Le point critique :
+
+> **`sw.js` et `sw-precache-manifest.json` doivent être servis en `no-cache`.**
+> Sinon le navigateur met le service worker à jour en arrière-plan mais ne
+> l'exécute qu'au **prochain** chargement — le coach passerait le reste de la
+> saison sur une version antérieure, avec un pré-cache d'une autre version. Le
+> symptôme (« ça marchait hier ») ne mène nulle part.
+
+Les assets sous `/_next/static/` portent leur hash de contenu : `immutable` pendant
+un an. Le HTML est toujours revalidé, sinon il pointerait vers un bundle supprimé.
+
+### Checklist Supabase
+
+Une seule fois, dans le dashboard :
+
+- [ ] Exécuter **`supabase/schema.sql`** dans l'éditeur SQL
+- [ ] **Authentication → Sign In / Email** : décocher « Confirm email »
+- [ ] **Authentication → URL Configuration** : Site URL = domaine de prod,
+      Redirect URLs = `https://<domaine>/`
+- [ ] **Authentication → Sessions** : 30 jours, rotation du jeton ON
+- [ ] **Authentication → Email** : brancher un SMTP (Brevo, Resend, SMTP2GO) si
+      « mot de passe oublié » doit fonctionner. Sans SMTP, l'écran est présent
+      et le bouton échoue proprement.
+
+Le service email par défaut est plafonné à 2 emails/heure : c'est pourquoi aucun
+email ne circule au quotidien.
+
+⚠️ Si la synchronisation échoue avec `permission denied for table teams`, le bloc
+`grant` du fichier n'a pas été exécuté. Le fichier est idempotent : le réexécuter
+réaccorde les droits sans rien casser.
+
 ## Stack
 
 Next.js 16 (App Router, `output: 'export'`) · React 19 · TypeScript strict ·
@@ -271,21 +340,11 @@ Tailwind v4 · Dexie 4 (IndexedDB) · Zustand 5 · Zod 4 · Supabase 2 ·
 Vitest 5 · Playwright. Service worker et icônes écrits à la main, sans
 bibliothèque de PWA.
 
-## Déploiement
-
-Push depuis GitHub sur Coolify, build statique servi par Nginx. La configuration
-Nginx complète est dans **`deploy/nginx.conf`**, à copier dans le panneau
-Coolify ou à monter dans le conteneur Nginx.
-
-Sur Coolify, les deux variables `NEXT_PUBLIC_*` se déclarent dans les
-**variables d'environnement de l'application**. Rappel : elles sont lues au
-build — les modifier déclenche un redéploiement, pas un redémarrage.
-
-`next.config.ts` impose `output: 'export'` : aucune fonction serveur, aucune
-route dynamique. Le lien de réinitialisation de mot de passe revient donc sur
+`next.config.ts` impose `output: 'export'` : aucune fonction serveur, aucune route
+dynamique. Le lien de réinitialisation de mot de passe revient donc sur
 `https://<domaine>/`, où l'application lit le fragment d'URL et ouvre le
-formulaire de nouveau mot de passe. Si le lien est renvoyé sur une autre URL,
-la session de récupération n'est pas reconnue.
+formulaire de nouveau mot de passe. Si le lien est renvoyé sur une autre URL, la
+session de récupération n'est pas reconnue.
 
 ## Point d'attention
 
