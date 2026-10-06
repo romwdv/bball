@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
+import { DeleteMatchButton } from "@/features/match/DeleteMatchButton";
 import { repos } from "@/data";
 import type { Action } from "@/domain/types";
 import { QUARTERS, type MatchStatus, type Quarter } from "@/domain/types";
@@ -54,8 +55,24 @@ function HistoryScreen() {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Liste des matchs, avec suppression possible.
+ *
+ * Le bouton apparaît sur **tous** les matchs, en cours comme terminés : un match
+ * en cours est précisément celui qu'on crée par erreur — mauvais adversaire, puis
+ * on oublie. Ne proposer la suppression que sur les matchs terminés obligerait à
+ * clôturer un match pour pouvoir l'effacer.
+ */
 function MatchList() {
-  const { matches, inProgress, loading } = useHistoryData();
+  // Forcé après une suppression : `useAsyncData` ne se rejoue pas, donc le match
+  // effacé resterait affiché — le pire rendu possible pour ce bouton.
+  const [revision, setRevision] = useState(0);
+  const onDeleted = useCallback(() => {
+    setRevision((current) => current + 1);
+  }, []);
+
+  const { matches, finished, inProgress, actionCounts, loading } =
+    useHistoryData(revision);
 
   return (
     <main className="flex flex-1 flex-col overflow-y-auto px-4 pt-(--padding-safe-t) pb-(--padding-safe-b)">
@@ -87,25 +104,29 @@ function MatchList() {
           <h2 className="mb-2 text-sm font-medium text-warning">En cours</h2>
           <ul className="flex flex-col gap-2">
             {inProgress.map((match) => (
-              <li key={match.id}>
-                <MatchRow match={match} />
-              </li>
+              <MatchItem
+                key={match.id}
+                match={match}
+                actionCount={actionCounts.get(match.id) ?? 0}
+                onDeleted={onDeleted}
+              />
             ))}
           </ul>
         </section>
       )}
 
-      {matches.length > inProgress.length && (
+      {finished.length > 0 && (
         <section aria-label="Matchs terminés">
           <h2 className="mb-2 text-sm font-medium text-secondary">Terminés</h2>
           <ul className="flex flex-col gap-2">
-            {matches
-              .filter((match) => match.status === "finished")
-              .map((match) => (
-                <li key={match.id}>
-                  <MatchRow match={match} />
-                </li>
-              ))}
+            {finished.map((match) => (
+              <MatchItem
+                key={match.id}
+                match={match}
+                actionCount={actionCounts.get(match.id) ?? 0}
+                onDeleted={onDeleted}
+              />
+            ))}
           </ul>
         </section>
       )}
@@ -113,11 +134,41 @@ function MatchList() {
   );
 }
 
+/**
+ * Un match dans la liste : sa fiche, et le bouton de suppression.
+ *
+ * `flex-1` sur la fiche pour qu'elle occupe toute la largeur restante : sans ça,
+ * le bouton stole l'espace du nom de l'adversaire, qui est l'information que le
+ * coach lit en premier.
+ */
+function MatchItem({
+  match,
+  actionCount,
+  onDeleted,
+}: {
+  match: import("@/data/schema").MatchRow;
+  actionCount: number;
+  onDeleted: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-2">
+      <span className="flex-1">
+        <MatchRow match={match} />
+      </span>
+      <DeleteMatchButton
+        match={match}
+        actionCount={actionCount}
+        onDeleted={onDeleted}
+      />
+    </li>
+  );
+}
+
 function MatchRow({ match }: { match: import("@/data/schema").MatchRow }) {
   return (
     <Link
       href={`/history/?m=${match.id}`}
-      className="surface-card flex min-h-tap-min items-center justify-between gap-3 px-4 py-3"
+      className="surface-card flex min-h-tap-min w-full items-center justify-between gap-3 px-4 py-3"
     >
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-medium">vs {match.opponentName}</span>

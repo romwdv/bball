@@ -51,9 +51,9 @@ async function seed(): Promise<void> {
   });
 }
 
-function Probe() {
-  const { matches, finished, inProgress, matchCount, loading } =
-    useHistoryData();
+function Probe({ revision = 0 }: { revision?: number }) {
+  const { matches, finished, inProgress, matchCount, actionCounts, loading } =
+    useHistoryData(revision);
 
   if (loading) return <span>chargement</span>;
   return (
@@ -62,6 +62,13 @@ function Probe() {
       <span data-testid="finished">{finished.length}</span>
       <span data-testid="progress">{inProgress.length}</span>
       <span data-testid="matchCount">{matchCount}</span>
+      {/* Le décompte par match est affiché pour vérifier que la lecture des
+          actions a bien eu lieu — pas seulement que le tableau existe. */}
+      <span data-testid="counts">
+        {[...actionCounts.entries()]
+          .map(([id, count]) => `${id}:${count}`)
+          .join(",")}
+      </span>
       <ul>
         {matches.map((match) => (
           <li key={match.id}>{match.opponentName}</li>
@@ -107,5 +114,81 @@ describe("useHistoryData", () => {
     });
     expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("BC Sud");
     expect(screen.getAllByRole("listitem")[2]).toHaveTextContent("BC Nuit");
+  });
+
+  it("compte les actions actives de chaque match", async () => {
+    // Le compte sert à la confirmation de suppression : « 40 actions seront
+    // perdues » est le seul énoncé qui permet de vérifier qu'on choisit le bon
+    // match.
+    const team = await repos.teams.ensureLocal();
+    const player = await repos.players.create(team.id, {
+      firstName: "Karim",
+      lastName: "Bernard",
+      number: 4,
+    });
+    const match = await repos.matches.create(team.id, {
+      opponentName: "BC Compté",
+      date: "2026-10-06",
+    });
+    await repos.actions.append(match.id, [
+      { playerId: player.id, quarter: 1, kind: "shot", value: 2, made: true },
+      { playerId: player.id, quarter: 1, kind: "foul" },
+    ]);
+
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("counts")).toHaveTextContent(
+        `${match.id}:2`,
+      );
+    });
+  });
+
+  it("exclut les actions annulées du compte", async () => {
+    const team = await repos.teams.ensureLocal();
+    const player = await repos.players.create(team.id, {
+      firstName: "Karim",
+      lastName: "Bernard",
+      number: 4,
+    });
+    const match = await repos.matches.create(team.id, {
+      opponentName: "BC Annulé",
+      date: "2026-10-06",
+    });
+    const { actions } = await repos.actions.append(match.id, [
+      { playerId: player.id, quarter: 1, kind: "shot", value: 2, made: true },
+    ]);
+    await repos.actions.voidAction(actions[0]!.id);
+
+    render(<Probe />);
+
+    // Aucune entrée pour ce match : la confirmation affichera « il n'en a
+    // aucune ». Compter l'action annulée donnerait « 1 action sera perdue » —
+    // une formulation trompeuse, puisque rien n'est actif.
+    await waitFor(() => {
+      expect(screen.getByTestId("total")).toHaveTextContent("1");
+    });
+    expect(screen.getByTestId("counts")).not.toHaveTextContent(match.id);
+  });
+
+  it("relaît quand la révision change", async () => {
+    await seed();
+    const { rerender } = render(<Probe revision={0} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("total")).toHaveTextContent("3");
+    });
+
+    const team = await repos.teams.ensureLocal();
+    await repos.matches.create(team.id, {
+      opponentName: "BC Nouveau",
+      date: "2026-10-09",
+    });
+    rerender(<Probe revision={1} />);
+
+    // Sans ce mécanisme, un match supprimé resterait affiché après le tap sur
+    // « Supprimer » — le pire rendu possible pour ce bouton.
+    await waitFor(() => {
+      expect(screen.getByTestId("total")).toHaveTextContent("4");
+    });
   });
 });

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { repos } from "@/data";
 import type { MatchRow } from "@/data/schema";
 import { MatchStatus } from "@/domain/types";
 import { formatDate } from "@/features/match/formatDate";
 import { useAuthStore } from "@/features/auth/store";
+import { DeleteMatchButton } from "@/features/match/DeleteMatchButton";
 import { InstallPrompt } from "@/features/pwa/InstallPrompt";
 import { useAsyncData } from "@/ui/useAsyncData";
 
@@ -30,6 +31,8 @@ interface HomeData {
   unfinished: MatchRow[];
   /** L'équipe locale a dû être (re)créée pendant ce chargement. */
   recreated: boolean;
+  /** Actions actives par match, pour la confirmation de suppression. */
+  actionCounts: ReadonlyMap<string, number>;
 }
 
 export default function HomePage() {
@@ -46,13 +49,41 @@ export default function HomePage() {
     // sur tous les appareils). « Existe-t-elle ? » se demande donc au store.
     const existing = await store.teams.list();
     const team = await store.teams.ensureLocal();
+    const unfinished = await store.matches.listUnfinished(team.id);
+
+    // Comptage des actions, pour que la confirmation de suppression dise « 40
+    // actions seront perdues » plutôt qu'un nom d'adversaire — seul le premier
+    // permet de vérifier qu'on choisit le bon match.
+    const actions =
+      unfinished.length === 0
+        ? []
+        : await store.actions.listByMatches(
+            unfinished.map((match) => match.id),
+            { includeVoided: false },
+          );
+    const actionCounts = new Map<string, number>();
+    for (const action of actions) {
+      actionCounts.set(
+        action.matchId,
+        (actionCounts.get(action.matchId) ?? 0) + 1,
+      );
+    }
+
     return {
-      unfinished: await store.matches.listUnfinished(team.id),
+      unfinished,
+      actionCounts,
       recreated: existing.length === 0,
     };
   }, []);
 
-  const { data, loading } = useAsyncData<HomeData>(load, [load]);
+  // Forcé après une suppression, pour la même raison que dans l'historique :
+  // sans relecture, le match effacé resterait dans la liste.
+  const [revision, setRevision] = useState(0);
+  const onDeleted = useCallback(() => {
+    setRevision((current) => current + 1);
+  }, []);
+
+  const { data, loading } = useAsyncData<HomeData>(load, [load, revision]);
   const unfinished = data?.unfinished ?? [];
   const resume = unfinished[0];
 
@@ -107,10 +138,10 @@ export default function HomePage() {
 
         <ul className="flex flex-col gap-2">
           {unfinished.map((match) => (
-            <li key={match.id}>
+            <li key={match.id} className="flex items-center gap-2">
               <Link
                 href={`/match/?m=${match.id}`}
-                className="surface-card flex min-h-tap-min items-center justify-between px-4 py-3"
+                className="surface-card flex min-h-tap-min flex-1 items-center justify-between px-4 py-3"
               >
                 <span className="flex flex-col">
                   <span className="font-medium">vs {match.opponentName}</span>
@@ -122,6 +153,14 @@ export default function HomePage() {
                   {STATUS_LABEL[match.status]}
                 </span>
               </Link>
+              {/* Sur un match en cours, le bouton est indispensable : c'est
+                  celui qu'on crée par erreur, et il faut pouvoir l'effacer sans
+                  le clôturer d'abord. */}
+              <DeleteMatchButton
+                match={match}
+                actionCount={data?.actionCounts.get(match.id) ?? 0}
+                onDeleted={onDeleted}
+              />
             </li>
           ))}
         </ul>

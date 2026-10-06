@@ -175,6 +175,7 @@ describe("poussée de l'outbox", () => {
       id: `matches:${String(match?.id)}`,
       entity: "matches",
       entityId: String(match?.id),
+      operation: "upsert",
       payload: fromCloudRow("matches", match as Record<string, unknown>),
       createdAt: Date.now(),
       attempts: 0,
@@ -535,5 +536,110 @@ describe("cycle complet et backoff", () => {
 
     expect(seen).toEqual([syncStatus().state]);
     unsubscribe();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suppressions
+// ---------------------------------------------------------------------------
+
+describe("poussée des suppressions", () => {
+  it("envoie les suppressions avant les upserts", async () => {
+    await seed();
+
+    // Suppression d'un match déjà envoyé : son upsert a été acquitté, l'entrée
+    // restante est le `delete`.
+    const match = (await repos().matches.listUnfinished("local"))[0]!;
+    await repos().matches.delete(match.id);
+
+    await pushPending(remote.client);
+
+    // Le delete doit partir avant tout upsert : une ligne supprimée localement ne
+    // peut pas être réécrite par un envoi retardé.
+    const deleteIndex = remote.calls.findIndex((c) => c.op === "delete");
+    const upsertIndex = remote.calls.findIndex((c) => c.op === "upsert");
+    expect(deleteIndex).toBeGreaterThanOrEqual(0);
+    expect(upsertIndex === -1 || deleteIndex < upsertIndex).toBe(true);
+  });
+
+  it("supprime les actions avant leur match", async () => {
+    await seed();
+    const match = (await repos().matches.listUnfinished("local"))[0]!;
+
+    await repos().matches.delete(match.id);
+    await pushPending(remote.client);
+
+    // L'ordre inverse est le seul sûr : une action ne peut pas être écrite après
+    // la suppression de son match.
+    const tables = remote.calls
+      .filter((c) => c.op === "delete")
+      .map((c) => c.table);
+    expect(tables).toEqual(["actions", "matches"]);
+  });
+
+  it("regroupe les suppressions d'une même table en une requête", async () => {
+    const { match, player } = await seed();
+    // Une deuxième action : une requête par action doublerait les allers-retours
+    // réseau d'une suppression, en gymnase.
+    await repos().actions.append(match.id, [
+      { playerId: player.id, quarter: 2, kind: "foul" },
+    ]);
+
+    await repos().matches.delete(match.id);
+    await pushPending(remote.client);
+
+    const actionDeletes = remote.calls.filter(
+      (c) => c.op === "delete" && c.table === "actions",
+    );
+    expect(actionDeletes).toHaveLength(1);
+    expect(actionDeletes[0]?.rows).toBe(2);
+  });
+
+  it("retire la ligne du faux cloud", async () => {
+    await seed();
+    await pushPending(remote.client);
+    const before = remote.tables.get("matches")?.length ?? 0;
+
+    const match = (await repos().matches.listUnfinished("local"))[0]!;
+    await repos().matches.delete(match.id);
+    await pushPending(remote.client);
+
+    expect(remote.tables.get("matches")).toHaveLength(before - 1);
+  });
+
+  it("garde l'entrée si le cloud refuse la suppression", async () => {
+    await seed();
+    await pushPending(remote.client);
+    const match = (await repos().matches.listUnfinished("local"))[0]!;
+
+    await repos().matches.delete(match.id);
+    remote.failOn.set("matches", "suppression refusée");
+
+    await expect(pushPending(remote.client)).rejects.toThrow(
+      "suppression refusée",
+    );
+
+    // Sans cela, le match reviendrait au tirage suivant sans que rien ne le
+    // signale : le coach verrait son match se réinstaller tout seul.
+    const entries = await database.outbox.toArray();
+    expect(entries.some((entry) => entry.entityId === match.id)).toBe(true);
+    expect(
+      entries.find((entry) => entry.entityId === match.id)?.operation,
+    ).toBe("delete");
+  });
+
+  it("n'envoie pas de suppression au tirage", async () => {
+    await seed();
+    await pushPending(remote.client);
+    const match = (await repos().matches.listUnfinished("local"))[0]!;
+    await repos().matches.delete(match.id);
+    await pushPending(remote.client);
+
+    await pullChanges(remote.client);
+
+    // Le tirage ne réécrit jamais : il ne fait qu'appliquer ce que le cloud a. Un
+    // `delete` local qui repartirait en `select` recréerait la ligne supprimée.
+    const applied = await database.matches.get(match.id);
+    expect(applied).toBeUndefined();
   });
 });

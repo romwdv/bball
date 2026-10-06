@@ -13,11 +13,16 @@ import {
  *
  * Le compteur est une pastille par faute, pas un nombre : le coach voit « il en
  * reste une » d'un coup d'œil en gymnase, ce qu'un « 3/5 » en police normale ne
- * permet pas. Passé `FOUL_LIMIT`, la pastilleilledépassée vire au rouge — c'est
- * le seuil d'élimination, et il doit être visible sans compter.
+ * permet pas. Passé `FOUL_LIMIT`, la pastille dépassée vire au rouge — c'est le
+ * seuil d'élimination, et il doit être visible sans compter.
+ *
+ * Les fautes sont **cumulées sur le match entier**, jamais sur la période : la
+ * limite à cinq est par rencontre. L'appelant est responsable de passer le
+ * cumul — voir `useMatchData`.
  */
 
 export interface FoulDotsProps {
+  /** Fautes cumulées sur le match, pas sur la période affichée. */
   fouls: number;
   /** Affiche le compteur numérique en plus des pastilles. */
   showCount?: boolean;
@@ -25,19 +30,25 @@ export interface FoulDotsProps {
 
 export function FoulDots({ fouls, showCount = false }: FoulDotsProps) {
   return (
-    <span className="flex items-center gap-0.5" aria-hidden="true">
-      {Array.from({ length: FOUL_LIMIT }, (_, index) => (
-        <span
-          key={index}
-          className={`h-1.5 w-1.5 rounded-full ${
-            index < fouls
-              ? index >= FOUL_LIMIT - 1
-                ? "bg-foul"
-                : "bg-warning"
-              : "bg-edge-strong"
-          }`}
-        />
-      ))}
+    <span className="flex items-center gap-0.5">
+      {/* Les pastilles sont purement décoratives ; le nombre est annoncé une fois
+          pour les lecteurs d'écran. Tout le composant ne peut pas être en
+          `aria-hidden` : le compteur deviendrait invisible, alors que c'est
+          précisément lui qui porte le seuil d'élimination. */}
+      <span className="flex items-center gap-0.5" aria-hidden="true">
+        {Array.from({ length: FOUL_LIMIT }, (_, index) => (
+          <span
+            key={index}
+            className={`h-1.5 w-1.5 rounded-full ${
+              index < fouls
+                ? index >= FOUL_LIMIT - 1
+                  ? "bg-foul"
+                  : "bg-warning"
+                : "bg-edge-strong"
+            }`}
+          />
+        ))}
+      </span>
       <span className="sr-only tabular text-xs text-secondary">
         {fouls} faute{fouls > 1 ? "s" : ""} sur {FOUL_LIMIT}
       </span>

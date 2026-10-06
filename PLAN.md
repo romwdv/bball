@@ -1291,3 +1291,94 @@ Une entrée par tâche ou groupe de tâches. Format : date · phase · quoi · r
 | 2026-10-06 | 8     | 🔴 E2E : `getByRole("button", {name: "X"})` matche par sous-ensemble                | Le header porte « Annuler la dernière action » **et** la barre porte « Annuler » ; la barre porte « Terminer » **et** la fiche de clôture aussi. Sans `exact`, le test échoue sur une ambiguïté de libellé et non sur un comportement. Trois occurrences dans le smoke test                                                                                                                             |
 | 2026-10-06 | 8     | E2E : deux ajouts de joueur doivent être **attendus** entre eux                     | Sans attente, le deuxième remplissage vise le nœud que le roster est en train de remplacer, et le bouton reste désactivé sur un nom vide. Échec intermittent, sans rapport avec la fonctionnalité testée                                                                                                                                                                                                |
 | 2026-10-06 | 8     | `pnpm verify` + couverture + E2E + budget                                           | ✅ 563 tests · 19 E2E · 98,24 % lignes, 96,73 % stmts, 96,61 % fonctions, 90,29 % branches · premier écran 377,7 ko pour un budget de 400 ko. **Phase 8 close**                                                                                                                                                                                                                                         |
+
+---
+
+## 10. Correctifs après la phase 8
+
+Trois demandes du commanditaire, traitées dans l'ordre. Les deux premières
+partageaient la même cause racine — `useMatchData` ne fournissait qu'une carte de
+statistiques par période, et le carrousel comme le header en dépendaient.
+
+### 🔴 Les fautes repartaient de zéro à chaque période
+
+`useMatchData` filtrait les actions **par période** avant d'agréger, et le
+compteur de fautes en était issu. Conséquence : la limite à cinq se réarmait à
+chaque quart temps, et un joueur sorti en Q1 pouvait reprendre le terrain en
+prenant cinq fautes de plus. La feuille de match aurait compté dix fautes là où
+la règle en compte cinq.
+
+La règle métier est **par rencontre**, pas par période. `foulsByPlayer` est
+donc agrégé sur toutes les actions, et alimente le carrousel comme le bouton
+FAUTE — ce dernier parce qu'il porte le blocage à cinq.
+
+Corrigé au passage : `FoulDots` était entièrement en `aria-hidden`, ce qui
+rendait le compteur invisible aux lecteurs d'écran. Les pastilles sont
+décoratives ; le nombre, non — c'est lui qui porte le seuil d'élimination.
+
+### 🔴 Le score du header se remettait à zéro entre les périodes
+
+Le score affiché était la somme des points **de la période**. C'est le chiffre
+que le coach annonce au banc : il ne peut pas disparaître en passant de Q2 à Q3.
+`totalPoints` est désormais calculé sur toutes les actions, et non sur la somme
+des joueurs affichés — une action dont le joueur aurait quitté le roster ne doit
+pas disparaître du score.
+
+Les points **du carrousel** restent par période : « combien a-t-il mis ce
+quart-ci » est la question pendant une période. Le détail par période est
+également disponible dans la feuille de match, via son sélecteur.
+
+### Ajout — suppression d'un match
+
+Bouton dans l'historique **et** sur l'accueil, pour les matchs en cours comme
+terminés. Un match en cours est précisément celui qu'on crée par erreur ;
+n'ouvrir la suppression que sur les matchs terminés obligerait à clôturer un
+match pour pouvoir l'effacer.
+
+Trois décisions qui méritent d'être notées :
+
+1. **La confirmation annonce le nombre d'actions.** « 40 actions seront perdues »
+   est le seul énoncé qui permet de vérifier qu'on choisit le bon match : deux
+   matchs contre la même équipe sont courants dans une saison.
+2. **La suppression traverse la synchronisation.** Une suppression purement locale
+   ferait revenir le match au tirage suivant — un fantôme impossible à expliquer.
+   L'outbox gagne donc une opération `delete`, qui part **avant** les upserts et
+   dans l'ordre inverse : une action ne peut pas être écrite après la suppression
+   de son match.
+3. **Les entrées `upsert` en attente sont purgées avant de poser les `delete`.**
+   Dans l'autre ordre, l'upsert d'une action jamais synchronisée remplacerait la
+   suppression, et le cloud recréerait le match au cycle suivant.
+
+Pas de corbeille : elle exigerait un état supplémentaire dans l'outbox, donc un
+cas de résolution de plus dans un module déjà complexe, et une corbeille vide qui
+ne se vide jamais ressemble à un bug.
+
+### Fichiers touchés par les correctifs
+
+```
+src/features/match/PlayerCarousel.tsx    foulsByPlayer séparé de statsByPlayer
+src/features/match/MatchHeader.tsx       reçoit `score`, ne l'additionne plus
+src/ui/Badges.tsx                        compteur de fautes hors aria-hidden
+src/data/schema.ts                       OutboxEntry.operation
+src/data/outbox.ts                       enqueueDelete()
+src/data/repositories.ts                 MatchRepository.delete()
+src/sync/remote.ts                       deleteByIds()
+src/sync/engine.ts                       suppressions avant upserts, ordre inverse
+src/features/match/DeleteMatchButton.tsx confirmation + appel au repository
+src/features/history/useHistoryData.ts   actionCounts par match, `revision`
+src/app/history/page.tsx                 bouton sur les deux sections
+src/app/page.tsx                         bouton sur les matchs en cours
+```
+
+| Date       | Phase | Action                                                 | Résultat                                                                                                                                                                                                                                                                                        |
+| ---------- | ----- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-06 | —     | 🔴 Fautes remises à zéro chaque période                | `useMatchData` filtrait par période avant d'agréger, donc la limite à cinq se réarmait à chaque quart temps. Un joueur sorti en Q1 pouvait en prendre cinq de plus, et la feuille en comptait dix. `foulsByPlayer` agrège sur le match entier — c'est la règle métier, pas un choix d'affichage |
+| 2026-10-06 | —     | `FoulDots` était entièrement `aria-hidden`             | Le compteur de fautes était invisible aux lecteurs d'écran. Les pastilles sont décoratives ; le nombre porte le seuil d'élimination, donc il est sorti du `aria-hidden`                                                                                                                         |
+| 2026-10-06 | —     | 🔴 Score du header remis à zéro par période            | C'est le chiffre que le coach annonce au banc. `totalPoints` est calculé sur toutes les actions, pas sur la somme des joueurs affichés : une action dont le joueur aurait quitté le roster ne doit pas disparaître du score                                                                     |
+| 2026-10-06 | —     | Le smoke test avait **validé la mauvaise règle**       | Il vérifiait que le score tombait à zéro en Q3 — exactement l'inverse de la demande. Corrigé, il vérifie maintenant que le cumul ne bouge pas, et que les fautes de Turing restent à 1/5 en passant de Q1 à Q3                                                                                  |
+| 2026-10-06 | —     | Ajout — suppression d'un match                         | Bouton dans l'historique et sur l'accueil. Confirmation nommant le nombre d'actions, bouton « Garder » en sortie de secours, erreur affichée sans fermer la fiche                                                                                                                               |
+| 2026-10-06 | —     | L'outbox gagne une opération `delete`                  | Une suppression purement locale ferait revenir le match au tirage suivant — un fantôme. Les suppressions partent avant les upserts, en ordre inverse : une action ne peut pas être écrite après la suppression de son match                                                                     |
+| 2026-10-06 | —     | Les `upsert` en attente sont purgés avant les `delete` | Dans l'autre ordre, l'upsert d'une action jamais synchronisée remplacerait la suppression et le cloud recréerait le match au cycle suivant                                                                                                                                                      |
+| 2026-10-06 | —     | `deleteByIds()` regroupe les suppressions d'une table  | Une requête par action doublerait les allers-retours réseau d'une suppression — en gymnase, c'est le seul moment où le réseau manque déjà                                                                                                                                                       |
+| 2026-10-06 | —     | `useHistoryData(revision)` pour forcer la relecture    | `useAsyncData` ne se rejoue pas : sans ça, le match effacé resterait à l'écran — le pire rendu possible pour un bouton « Supprimer »                                                                                                                                                            |
+| 2026-10-06 | —     | `pnpm verify` + couverture + E2E                       | ✅ 593 tests · 21 E2E · 98,25 % lignes, 96,76 % stmts, 96,53 % fonctions, 90,29 % branches. Budget de bundle respecté                                                                                                                                                                           |

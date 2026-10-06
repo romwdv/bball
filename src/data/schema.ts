@@ -64,7 +64,27 @@ export interface OutboxEntry {
   entity: SyncEntity;
   /** `id` de la ligne concernée dans sa table. */
   entityId: string;
-  payload: unknown;
+  /**
+   * Nature de la mutation.
+   *
+   * `upsert` est le cas général, et le seul jusqu'à la phase 8 : le domaine est
+   * append-only et une annulation est un upsert de `voidedAt`. `delete` existe
+   * pour une seule chose — la suppression explicite d'un match par le coach, qui
+   * n'est pas une correction mais une décision.
+   *
+   * L'entrée qui remplace une autre garde la même clé `entity:entityId` : une
+   * ligne ne porte donc jamais deux opérations concurrentes, et une suppression
+   * remplace le dernier upsert en attente. C'est ce qui rend l'ordre déterministe
+   * sans file d'attente par opération.
+   */
+  operation: "upsert" | "delete";
+  /**
+   * Instantané de la ligne au moment de la mutation.
+   *
+   * `null` pour une suppression : il n'y a rien à réécrire, seulement une ligne
+   * à retirer. Le champ reste présent pour que le moteur n'ait pas à le tester.
+   */
+  payload: unknown | null;
   createdAt: number;
   /** Nombre d'échecs d'envoi consécutifs. Pilote le backoff. */
   attempts: number;

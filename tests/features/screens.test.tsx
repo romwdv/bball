@@ -96,7 +96,7 @@ describe("MatchHeader", () => {
           finishedAt: null,
           updatedAt: 0,
         }}
-        statsByPlayer={new Map()}
+        score={0}
       />,
     );
   }
@@ -165,9 +165,20 @@ describe("PlayerCarousel", () => {
    */
   function statsFixture() {
     return new Map<string, ReturnType<typeof aggregateFor>>([
-      [roster[0]!.id, { ...aggregateFor([], "a"), points: 7, fouls: 3 }],
+      [roster[0]!.id, { ...aggregateFor([], "a"), points: 7 }],
       [roster[1]!.id, aggregateFor([], "b")],
     ]);
+  }
+
+  /**
+   * Fautes cumulées du match.
+   *
+   * Séparé des stats de période dans le composant, donc aussi dans la fixture :
+   * mélanger les deux ici masquerait exactement la distinction que la règle des
+   * cinq fautes impose.
+   */
+  function foulsFixture() {
+    return new Map<string, number>([[roster[0]!.id, 3]]);
   }
 
   function renderCarousel() {
@@ -175,6 +186,7 @@ describe("PlayerCarousel", () => {
       <PlayerCarousel
         players={roster}
         statsByPlayer={statsFixture()}
+        foulsByPlayer={foulsFixture()}
         onSelect={(id) => useMatchStore.getState().lockPlayer(id)}
       />,
     );
@@ -212,6 +224,20 @@ describe("PlayerCarousel", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("affiche les fautes du match entier, pas de la période", () => {
+    renderCarousel();
+
+    // Les fautes viennent de `foulsByPlayer`, jamais de `statsByPlayer` :
+    // la limite à cinq est par rencontre. Si le compteur repartait à zéro à
+    // chaque période, un joueur sorti en Q1 pourrait prendre cinq fautes de
+    // plus, et la feuille de match en compterait dix.
+    expect(
+      screen
+        .getAllByText((_c, node) => node?.textContent === "3/5")
+        .length,
+    ).toBeGreaterThan(0);
+  });
+
   it("affiche les pastilles de fautes", () => {
     renderCarousel();
     // Le compteur est rendu en deux nœuds de texte (« 3 » puis « /5 »), donc
@@ -228,6 +254,7 @@ describe("PlayerCarousel", () => {
       <PlayerCarousel
         players={roster}
         statsByPlayer={new Map()}
+        foulsByPlayer={new Map()}
         onSelect={() => {}}
       />,
     );
@@ -240,6 +267,7 @@ describe("PlayerCarousel", () => {
       <PlayerCarousel
         players={[]}
         statsByPlayer={new Map()}
+        foulsByPlayer={new Map()}
         onSelect={() => {}}
       />,
     );

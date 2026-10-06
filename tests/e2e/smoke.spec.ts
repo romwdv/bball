@@ -36,6 +36,8 @@ const TURING_BINS = 2;
 const TURING_FOULS = 1;
 const TURING_FREE_THROWS = 2;
 
+/** Un lancer annulé, pour vérifier que l'annulation retire un point. */
+
 /**
  * Total du match, fautes exclues.
  *
@@ -171,40 +173,48 @@ test.describe("un match de bout en bout", () => {
     // l'ensemble des règles est cohérent — fautes et lancers compris.
     await expect(page.getByTestId("score")).toHaveText(String(POINTS));
 
-    // Passage en période 3 : le score affiché tombe à zéro, et c'est **voulu**.
-    // Le score du header est celui de la période courante, pas un cumul — c'est
-    // ce qui distingue une saisie par quart temps d'un compteur unique. Un test
-    // qui vérifierait ici le total du match passerait à côté de la règle métier
-    // la plus visible de l'application.
-    await page.getByRole("tab", { name: "3" }).click();
-    await expect(page.getByRole("tab", { name: "3" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.getByTestId("score")).toHaveText("0");
-
-    // Retour en période 1 : les points sont toujours là, calculés depuis les
-    // actions — jamais stockés.
-    await page.getByRole("tab", { name: "1" }).click();
+    // Passage en période 3 : **le score du header ne bouge pas**. C'est un cumul
+    // de match, parce que c'est le chiffre que le coach annonce au banc ; il ne
+    // doit pas se remettre à zéro en changeant de période.
+    // `exact` sur les onglets de période : le nom accessible d'un joueur commence
+    // par son numéro, donc « 3 » matche aussi « 3pts … Lovelace ». Les onglets de
+    // période sont dans un `tablist` nommé, donc on le scope.
+    const period = page.getByRole("tablist", { name: "Période" });
+    await period.getByRole("tab", { name: "3", exact: true }).click();
+    await expect(
+      period.getByRole("tab", { name: "3", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("score")).toHaveText(String(POINTS));
 
-    // ── Annulation ──────────────────────────────────────────────────────────
-    // Le score du header est celui de la période courante : il reste donc à zéro
-    // tant qu'on est en Q3, alors que l'annulation a bien eu lieu. Le vérifier
-    // ici empêche le test de passer pour la mauvaise raison — un score qui n'aurait
-    // pas bougé parce que l'écran affichait autre chose.
-    await page.getByRole("tab", { name: "3" }).click();
-    await expect(page.getByTestId("score")).toHaveText("0");
+    // En revanche les points **du carrousel** suivent la période : c'est ce que
+    // le coach veut lire pendant un quart temps. Une action enregistrée en Q3
+    // s'ajoute au cumul mais pas aux points de la période affichée.
+    await period.getByRole("tab", { name: "1", exact: true }).click();
+    await expect(page.getByTestId("score")).toHaveText(String(POINTS));
 
+    // ── Les fautes ne repartent pas à zéro entre les périodes ───────────────
+    // Turing a une faute, prise en Q1. Le compteur doit rester à 1 en Q3 : la
+    // limite à cinq est **par rencontre**. S'il repartait à zéro, un joueur sorti
+    // en Q1 pourrait reprendre le terrain en prenant cinq fautes de plus — et la
+    // feuille de match en compterait dix.
+    const turingTab = page.getByRole("tab", { name: /Turing/ });
+    await expect(turingTab).toHaveAccessibleName(/1\/5/);
+
+    await period.getByRole("tab", { name: "3", exact: true }).click();
+    await expect(turingTab).toHaveAccessibleName(/1\/5/);
+
+    await period.getByRole("tab", { name: "2", exact: true }).click();
+    await expect(turingTab).toHaveAccessibleName(/1\/5/);
+
+    // ── Annulation ──────────────────────────────────────────────────────────
     // `exact` : le header porte aussi un bouton « Annuler la dernière action »,
     // et Playwright fait du sous-ensemble une correspondance.
     await page.getByRole("button", { name: "Annuler", exact: true }).click();
     await expect(page.getByText("Dernière action annulée")).toBeVisible();
 
-    // L'annulation porte sur le **dernier appui du match**, pas sur le dernier
-    // appui de la période affichée. Revenu en Q1, la baisse est donc visible :
-    // exactement un point.
-    await page.getByRole("tab", { name: "1" }).click();
+    // Le cumul du header baisse d'exactement un point. Comme il est calculé sur
+    // toutes les actions, cela ne dépend pas de la période affichée : l'annulation
+    // porte sur le **dernier appui du match**.
     await expect(page.getByTestId("score")).toHaveText(
       String(POINTS_AFTER_UNDO),
     );
@@ -271,5 +281,118 @@ test.describe("un match de bout en bout", () => {
     await expect(pointsOf(page, "Lovelace")).resolves.toBe(POINTS_LOVELACE);
     await expect(pointsOf(page, "Turing")).resolves.toBe(POINTS_TURING);
     expect(POINTS_LOVELACE + POINTS_TURING).toBe(POINTS_AFTER_UNDO);
+  });
+});
+
+test.describe("suppression d'un match", () => {
+  test.setTimeout(60_000);
+
+  /** Un match terminé, avec deux actions, prêt à être supprimé. */
+  async function seedFinishedMatch(page: import("@playwright/test").Page) {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByLabel("Adversaire").fill("BC Jetable");
+    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
+    await page.getByLabel("Numéro").fill("4");
+    await page.getByRole("button", { name: "Ajouter au roster" }).click();
+    await page.getByRole("button", { name: "Commencer la saisie" }).click();
+    await expect(page.getByTestId("score")).toBeVisible();
+
+    await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+    await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+    await expect(page.getByTestId("score")).toHaveText("4");
+
+    await page.getByRole("button", { name: "Terminer" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Terminer", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Retour à l'accueil" }),
+    ).toBeVisible();
+  }
+
+  test("demande confirmation, puis efface le match et ses actions", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await seedFinishedMatch(page);
+
+    // ── Confirmation ───────────────────────────────────────────────────────
+    await page.goto("/history/");
+    await page
+      .getByRole("button", { name: "Supprimer le match contre BC Jetable" })
+      .click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // Le nombre d'actions est ce qui permet de vérifier qu'on choisit le bon
+    // match : deux matchs contre la même équipe sont courants dans une saison.
+    await expect(dialog).toContainText("2 actions");
+
+    // « Garder » ne supprime rien : c'est le geste de sortie de secours.
+    await dialog.getByRole("button", { name: "Garder" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole("link", { name: /vs BC Jetable .*Terminé/ }),
+    ).toBeVisible();
+
+    // ── Suppression effective ───────────────────────────────────────────────
+    await page
+      .getByRole("button", { name: "Supprimer le match contre BC Jetable" })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Supprimer", exact: true })
+      .click();
+
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText(/vs BC Jetable/)).toHaveCount(0);
+
+    // Le match est absent des **stats cumulées** aussi : ses actions ont été
+    // supprimées, pas seulement sa fiche.
+    await page.goto("/stats/");
+    await expect(page.getByRole("rowheader", { name: /Lovelace/ })).toHaveCount(
+      0,
+    );
+  });
+
+  test("supprime aussi un match en cours, depuis l'accueil", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await seedFinishedMatch(page);
+
+    // Un match en cours est celui qu'on crée par erreur : il faut pouvoir
+    // l'effacer sans le clôturer d'abord.
+    await page.goto("/");
+    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByLabel("Adversaire").fill("BC Oublié");
+    await page.getByLabel("Nom du joueur").fill("Alan Turing");
+    await page.getByLabel("Numéro").fill("7");
+    await page.getByRole("button", { name: "Ajouter au roster" }).click();
+    await page.getByRole("button", { name: "Commencer la saisie" }).click();
+    await expect(page.getByTestId("score")).toBeVisible();
+
+    await page.getByRole("button", { name: "Sortir" }).click();
+    await expect(page.getByRole("link", { name: /Reprendre/ })).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Supprimer le match contre BC Oublié" })
+      .click();
+
+    const dialog = page.getByRole("dialog");
+    // Un match sans action le dit franchement : « aucune » plutôt qu'un « 0
+    // actions » qui ferait croire à un bug de comptage.
+    await expect(dialog).toContainText("n’en a aucune");
+
+    await dialog
+      .getByRole("button", { name: "Supprimer", exact: true })
+      .click();
+
+    await expect(page.getByText(/vs BC Oublié/)).toHaveCount(0);
+    // Les autres matchs sont intacts : la suppression est ciblée.
+    await expect(page.getByRole("link", { name: /Reprendre/ })).toHaveCount(0);
+    await expect(page.getByText("Aucun match en cours")).toBeVisible();
   });
 });

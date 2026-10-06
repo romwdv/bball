@@ -2,7 +2,6 @@
 
 import { QUARTERS, type Quarter } from "@/domain/types";
 import type { MatchRow } from "@/data/schema";
-import type { PlayerStats } from "@/domain/stats";
 import { useMatchStore } from "@/features/match/store";
 import { formatDate } from "@/features/match/formatDate";
 import { SyncIndicator } from "@/features/sync/SyncIndicator";
@@ -21,20 +20,21 @@ import { SyncIndicator } from "@/features/sync/SyncIndicator";
 
 export interface MatchHeaderProps {
   match: MatchRow;
-  statsByPlayer: ReadonlyMap<string, PlayerStats>;
+  /**
+   * Score du match entier, toutes périodes confondues.
+   *
+   * Cumul, et non score de la période : c'est le chiffre que le coach annonce au
+   * banc, et il ne doit pas se remettre à zéro quand il passe de Q2 à Q3. Le
+   * détail par période reste lisible dans la feuille de match, où il a sa place.
+   */
+  score: number;
 }
 
-export function MatchHeader({ match, statsByPlayer }: MatchHeaderProps) {
+export function MatchHeader({ match, score }: MatchHeaderProps) {
   const quarter = useMatchStore((state) => state.quarter);
   const setQuarter = useMatchStore((state) => state.setQuarter);
   const undoLast = useMatchStore((state) => state.undoLast);
   const pendingFreeThrows = useMatchStore((state) => state.pendingFreeThrows);
-
-  // Score de l'équipe = somme des points du roster, sur la période courante.
-  // Recalculé à chaque rendu à partir des actions : c'est le domaine qui sait
-  // additionner, l'écran ne fait que lire.
-  let score = 0;
-  for (const stats of statsByPlayer.values()) score += stats.points;
 
   return (
     <header className="flex items-center gap-2 border-b border-edge px-(--padding-safe-l) pt-(--padding-safe-t) pb-(--padding-safe-r)">

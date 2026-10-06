@@ -1,6 +1,6 @@
 import type { ZodType } from "zod";
 import { newId } from "@/data/ids";
-import { enqueue } from "@/data/outbox";
+import { enqueue, enqueueDelete, outboxKey } from "@/data/outbox";
 import {
   type ActionRow,
   type MatchRow,
@@ -117,6 +117,17 @@ export interface MatchRepository {
    * d'être cochés.
    */
   rosterOf(id: string): Promise<PlayerRow[]>;
+  /**
+   * Supprime le match **et toutes ses actions**.
+   *
+   * Les joueurs ne sont pas touchés : ils appartiennent au roster de l'équipe et
+   * servent aux matchs suivants. Seules les lignes propres au match disparaissent.
+   *
+   * La suppression est propagée au cloud par des entrées d'outbox `delete` —
+   * sans quoi le match reviendrait au tirage suivant, comme un fantôme impossible
+   * à expliquer. Voir `enqueueDelete()`.
+   */
+  delete(id: string): Promise<void>;
 }
 
 export interface AppendResult {
@@ -561,6 +572,66 @@ class DexieMatchRepository implements MatchRepository {
       .equals(match.teamId)
       .toArray();
     return all.filter((player) => wanted.has(player.id)).sort(comparePlayers);
+  }
+
+  /**
+   * Supprime le match et ses actions, en une transaction.
+   *
+   * Les entrées d'outbox sont purgées **puis** remplacées par une entrée
+   * `delete` par ligne. L'ordre compte : si l'on enfilait d'abord les suppressions,
+   * une entrée d'upsert encore en file — donc une action saisie et jamais
+   * synchronisée — la remplacerait, et le cloud recréerait le match au cycle
+   * suivant. En purgeant d'abord, il ne reste que les suppressions à envoyer.
+   *
+   * L'identifiant du curseur de tirage n'est pas touché : une suppression n'est
+   * pas un horodatage. Le curseur peut donc rester en avance sur des lignes
+   * supprimées, ce qui est sans conséquence — il ne sert qu'à ne pas retélécharger
+   * ce qui n'a pas changé.
+   */
+  async delete(id: string): Promise<void> {
+    const now = Date.now();
+
+    await this.database.transaction(
+      "rw",
+      [this.database.matches, this.database.actions, this.database.outbox],
+      async () => {
+        // Un match déjà supprimé ne produit aucune entrée : la suppression est
+        // idempotente, comme un `DELETE` HTTP. Poser une entrée pour une ligne
+        // inexistante polluerait la file et ferait partir une requête inutile à
+        // chaque cycle.
+        const existing = await this.database.matches.get(id);
+        if (existing === undefined) return;
+
+        const actions = await this.database.actions
+          .where("matchId")
+          .equals(id)
+          .toArray();
+        const actionIds = actions.map((action) => action.id);
+
+        // Purge des entrées en attente pour ces lignes, puis pose des `delete`.
+        // `outboxKey` est appelé explicitement plutôt que par `enqueue`, car
+        // `enqueue` ferait un `put` sur une entrée qu'on vient de supprimer.
+        for (const entityId of [id, ...actionIds]) {
+          for (const entity of ["matches", "actions"] as const) {
+            const key = outboxKey(entity, entityId);
+            if ((await this.database.outbox.get(key)) !== undefined) {
+              await this.database.outbox.delete(key);
+            }
+          }
+        }
+
+        await this.database.actions.bulkDelete(actionIds);
+        await this.database.matches.delete(id);
+
+        // Une entrée `delete` par ligne : `enqueueDelete` porte sur un
+        // identifiant. Le moteur regroupe ensuite tous les ids d'une même entité
+        // en une seule requête réseau.
+        for (const actionId of actionIds) {
+          await enqueueDelete(this.database, "actions", actionId, now);
+        }
+        await enqueueDelete(this.database, "matches", id, now);
+      },
+    );
   }
 
   private async write(

@@ -75,7 +75,14 @@ function MatchScreen() {
    */
   const [confirming, setConfirming] = useState(false);
 
-  const { match, players, statsByPlayer, loading } = useMatchData(matchId);
+  const {
+    match,
+    players,
+    statsByPlayer,
+    foulsByPlayer,
+    totalPoints,
+    loading,
+  } = useMatchData(matchId);
 
   /**
    * Actions actives du match.
@@ -166,11 +173,12 @@ function MatchScreen() {
 
   return (
     <main className="flex flex-1 flex-col overflow-hidden">
-      <MatchHeader match={match} statsByPlayer={statsByPlayer} />
+      <MatchHeader match={match} score={totalPoints} />
 
       <PlayerCarousel
         players={players}
         statsByPlayer={statsByPlayer}
+        foulsByPlayer={foulsByPlayer}
         onSelect={lockPlayer}
       />
 
@@ -204,9 +212,10 @@ function MatchScreen() {
 
           <ActionGrid
             playerId={playerId ?? ""}
-            playerFouls={
-              playerId === null ? 0 : (statsByPlayer.get(playerId)?.fouls ?? 0)
-            }
+            // Fautes du match entier : la limite à cinq est par rencontre.
+            // Avec le compte de la période, un joueur sorti en Q1 pourrait en
+            // prendre cinq de plus en Q2.
+            playerFouls={foulsByPlayer.get(playerId ?? "") ?? 0}
             disabled={noPlayer}
             onRecord={async (drafts, kind) => {
               await record(drafts, kind);

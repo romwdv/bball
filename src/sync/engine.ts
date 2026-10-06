@@ -168,14 +168,24 @@ async function writeCursor(entity: SyncEntity, value: number): Promise<void> {
  * `PUSH_ORDER` : une action ne peut pas être écrite si son match n'existe pas
  * encore, la contrainte de clé étrangère le refuserait. L'échec est **global** —
  * on n'acquitte rien tant qu'une table n'a pas confirmé.
+ *
+ * Les suppressions partent **en premier**, et dans l'ordre inverse. C'est le
+ * seul sens possible : une ligne supprimée localement ne peut plus être réécrite
+ * par l'upsert qu'elle remplaçait dans la file, et une action ne peut pas
+ * être écrite après la suppression de son match.
  */
 export async function pushPending(client: RemoteClient): Promise<number> {
   const database = dataDb();
   const entries = await peek(database, 200);
   if (entries.length === 0) return 0;
 
+  // Les suppressions sont filtrées avant le regroupement : une table ne reçoit
+  // jamais à la fois un `delete` et un `upsert` sur la même ligne, et mélanger
+  // les deux dans la même requête produirait un comportement indéfini selon
+  // l'ordre d'exécution de Postgres.
+  const upsertable = entries.filter((entry) => entry.operation === "upsert");
   const byEntity = new Map<SyncEntity, OutboxEntry[]>();
-  for (const entry of entries) {
+  for (const entry of upsertable) {
     const bucket = byEntity.get(entry.entity);
     if (bucket === undefined) {
       byEntity.set(entry.entity, [entry]);
@@ -185,12 +195,53 @@ export async function pushPending(client: RemoteClient): Promise<number> {
   }
 
   const sent: string[] = [];
+  const allIds = entries.map((entry) => entry.id);
 
+  /**
+   * Enregistre l'échec de tout le lot et interrompt le cycle.
+   *
+   * Les entrées déjà envoyées avec succès seront renvoyées au prochain cycle —
+   * c'est le prix de l'idempotence, et il est inférieur à celui d'une perte.
+   */
+  async function abort(error: string): Promise<never> {
+    await fail(database, allIds, error);
+    throw new Error(error);
+  }
+
+  // ── Suppressions d'abord ────────────────────────────────────────────────
+  // Ordre inverse : les actions avant leur match. Le cloud effacerait le match
+  // en cascade, mais s'appuyer sur la cascade caching une action orpheline si
+  // elle vient à échouer seule.
+  const deletions = entries.filter((entry) => entry.operation === "delete");
+  const deletionsByEntity = new Map<SyncEntity, string[]>();
+  for (const entry of deletions) {
+    const bucket = deletionsByEntity.get(entry.entity);
+    if (bucket === undefined)
+      deletionsByEntity.set(entry.entity, [entry.entityId]);
+    else bucket.push(entry.entityId);
+  }
+
+  for (const entity of [...PUSH_ORDER].reverse()) {
+    const ids = deletionsByEntity.get(entity);
+    if (ids === undefined) continue;
+
+    const { error } = await client.from(tableOf(entity)).deleteByIds(ids);
+    if (error !== null) await abort(error.message);
+
+    for (const entry of deletions) {
+      if (entry.entity === entity) sent.push(entry.id);
+    }
+  }
+
+  // ── Puis les upserts, dans l'ordre des dépendances ───────────────────────
   for (const entity of PUSH_ORDER) {
     const bucket = byEntity.get(entity);
     if (bucket === undefined) continue;
 
-    const rows = bucket.map((entry) =>
+    const upserts = bucket.filter((entry) => entry.operation === "upsert");
+    if (upserts.length === 0) continue;
+
+    const rows = upserts.map((entry) =>
       toCloudRow(entity, entry.payload as ActionRow),
     );
 
@@ -198,19 +249,9 @@ export async function pushPending(client: RemoteClient): Promise<number> {
       .from(tableOf(entity))
       .upsert(rows, { onConflict: "id" });
 
-    if (error !== null) {
-      // Échec global : rien n'est acquitté, tout est marqué en échec. Les
-      // entrées déjà envoyées avec succès seront renvoyées au prochain cycle —
-      // c'est le prix de l'idempotence, et il est inférieur à celui d'une perte.
-      await fail(
-        database,
-        entries.map((entry) => entry.id),
-        error.message,
-      );
-      throw new Error(error.message);
-    }
+    if (error !== null) await abort(error.message);
 
-    sent.push(...bucket.map((entry) => entry.id));
+    sent.push(...upserts.map((entry) => entry.id));
   }
 
   await ack(database, sent);

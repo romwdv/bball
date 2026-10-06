@@ -64,6 +64,12 @@ function stubSupabase() {
           calls.push({ table, op: "upsert", args });
           return { data: null, error: { message: "échec RLS" } };
         },
+        delete: () => ({
+          in: (column: unknown, ids: unknown[]) => {
+            calls.push({ table, op: "delete-in", args: [column, ids] });
+            return Promise.resolve({ data: null, error: null });
+          },
+        }),
       };
     },
     auth: {
@@ -222,6 +228,49 @@ describe("adaptateur : lecture", () => {
     });
     expect(result.error?.message).toBe("échec RLS");
     expect(result.data).toBeNull();
+  });
+
+  it("supprime par identifiants, en une requête", async () => {
+    const stub = stubSupabase();
+    const remote = createRemote(stub.client);
+
+    const result = await remote.from("actions").deleteByIds(["a", "b", "c"]);
+
+    // Un seul appel réseau pour trois lignes : c'est tout l'intérêt de `ids`.
+    const deletes = stub.calls.filter((call) => call.op === "delete-in");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]?.table).toBe("actions");
+    // La colonne est explicite : c'est elle qui rend la requête lisible dans les
+    // journaux du dashboard, et `id` n'est pas devinable.
+    expect(deletes[0]?.args[0]).toBe("id");
+    expect(deletes[0]?.args[1]).toEqual(["a", "b", "c"]);
+    expect(result.error).toBeNull();
+  });
+
+  it("remonte l'erreur d'une suppression", async () => {
+    const stub = stubSupabase();
+    const failing = stubSupabase();
+    // `deleteByIds` sans droit renvoie une erreur, pas une exception : le moteur
+    // doit pouvoir la traiter comme n'importe quel autre échec.
+    (
+      failing.client as unknown as {
+        from: (table: string) => { delete: () => unknown };
+      }
+    ).from = () => ({
+      delete: () => ({
+        in: () =>
+          Promise.resolve({
+            data: null,
+            error: { message: "suppression refusée" },
+          }),
+      }),
+    });
+
+    const result = await createRemote(failing.client)
+      .from("matches")
+      .deleteByIds(["x"]);
+    expect(result.error?.message).toBe("suppression refusée");
+    void stub;
   });
 
   it("remonte l'erreur d'un select", async () => {

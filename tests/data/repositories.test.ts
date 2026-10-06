@@ -1104,3 +1104,146 @@ describe("garde-fou : match terminé", () => {
     expect(await repos.actions.listByMatch(matchId)).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suppression d'un match
+// ---------------------------------------------------------------------------
+
+describe("suppression d'un match", () => {
+  /** Match complet : équipe, joueur, actions de deux périodes. */
+  async function seedMatch() {
+    const team = await repos.teams.ensureLocal();
+    const player = await repos.players.create(team.id, {
+      firstName: "Karim",
+      lastName: "Bernard",
+      number: 4,
+    });
+    const match = await repos.matches.create(team.id, {
+      opponentName: "BC Nuit",
+      date: "2026-10-05",
+    });
+    const { actions } = await repos.actions.append(match.id, [
+      { playerId: player.id, quarter: 1, kind: "shot", value: 2, made: true },
+      { playerId: player.id, quarter: 2, kind: "foul" },
+    ]);
+    return { team, player, match, actions };
+  }
+
+  it("supprime le match et ses actions", async () => {
+    const { match, actions } = await seedMatch();
+
+    await repos.matches.delete(match.id);
+
+    expect(await repos.matches.get(match.id)).toBeUndefined();
+    for (const action of actions) {
+      expect(await repos.actions.get(action.id)).toBeUndefined();
+    }
+  });
+
+  it("laisse le roster de l'équipe intact", async () => {
+    const { match, player } = await seedMatch();
+
+    await repos.matches.delete(match.id);
+
+    // Les joueurs servent les matchs suivants : les supprimer viderait l'équipe
+    // d'un match créé par erreur.
+    expect(await repos.players.get(player.id)).toBeDefined();
+  });
+
+  it("ne touche pas aux autres matchs", async () => {
+    const { team, player, match } = await seedMatch();
+    const other = await repos.matches.create(team.id, {
+      opponentName: "BC Jour",
+      date: "2026-10-06",
+    });
+    await repos.actions.append(other.id, [
+      { playerId: player.id, quarter: 1, kind: "shot", value: 3, made: true },
+    ]);
+
+    await repos.matches.delete(match.id);
+
+    expect(await repos.matches.get(other.id)).toBeDefined();
+    expect(await repos.actions.countByMatch(other.id)).toBe(1);
+  });
+
+  it("met une entrée delete en file pour le match et ses actions", async () => {
+    const { match, actions } = await seedMatch();
+
+    await repos.matches.delete(match.id);
+
+    // Sans ces entrées, le match reviendrait au tirage suivant — un fantôme
+    // impossible à expliquer ni à supprimer ensuite.
+    const entries = await database.outbox.toArray();
+    const deletions = entries.filter((entry) => entry.operation === "delete");
+
+    expect(deletions.map((entry) => entry.entity).sort()).toEqual([
+      "actions",
+      "actions",
+      "matches",
+    ]);
+    expect(deletions.some((entry) => entry.entityId === match.id)).toBe(true);
+    for (const action of actions) {
+      expect(deletions.some((entry) => entry.entityId === action.id)).toBe(true);
+    }
+  });
+
+  it("purge les upserts en attente avant de poser les suppressions", async () => {
+    const { match, actions } = await seedMatch();
+
+    await repos.matches.delete(match.id);
+
+    const entries = await database.outbox.toArray();
+    // Seules les lignes du match sont concernées : l'équipe et le joueur portent
+    // toujours des `upsert`, ils servent les matchs suivants.
+    const concerning = entries.filter(
+      (entry) =>
+        entry.entityId === match.id ||
+        actions.some((action) => action.id === entry.entityId),
+    );
+
+    // Une seule opération par ligne : un `delete` ne peut pas cohabiter avec
+    // l'`upsert` qu'il remplace, sans quoi le cloud recréerait le match au
+    // cycle suivant.
+    expect(concerning.every((entry) => entry.operation === "delete")).toBe(true);
+    expect(
+      concerning.filter((entry) => entry.entityId === match.id),
+    ).toHaveLength(1);
+    for (const action of actions) {
+      expect(
+        concerning.filter((entry) => entry.entityId === action.id),
+      ).toHaveLength(1);
+    }
+
+    // Et l'équipe, elle, n'a pas bougé.
+    expect(entries.some((entry) => entry.entity === "teams")).toBe(true);
+  });
+
+  it("ne pose aucune entrée pour un match inconnu", async () => {
+    const { match } = await seedMatch();
+    const before = await database.outbox.count();
+
+    await repos.matches.delete("inexistant");
+
+    // Idempotent comme un `DELETE` HTTP : pas d'entrée pour une ligne absente,
+    // sinon la file se remplirait de suppressions de lignes qui n'ont jamais
+    // existé, et chaque cycle partirait avec une requête inutile.
+    expect(await repos.matches.get(match.id)).toBeDefined();
+    expect(await database.outbox.count()).toBe(before);
+  });
+
+  it("ne repropose rien si le match est déjà supprimé", async () => {
+    const { match, actions } = await seedMatch();
+
+    await repos.matches.delete(match.id);
+    await database.outbox.clear();
+    await repos.matches.delete(match.id);
+
+    // La seconde passe trouve un match absent et s'arrête : aucune entrée pour
+    // des lignes déjà parties, donc pas de requête inutile à chaque cycle.
+    const entries = await database.outbox.toArray();
+    expect(entries).toHaveLength(0);
+    for (const action of actions) {
+      expect(entries.some((e) => e.entityId === action.id)).toBe(false);
+    }
+  });
+});

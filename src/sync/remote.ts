@@ -55,6 +55,13 @@ export interface RemoteTable {
     options: { onConflict: string },
   ): Promise<RemoteResult<unknown>>;
   select(columns: string): RemoteQuery;
+  /**
+   * Suppression par identifiant.
+   *
+   * `ids` plutôt qu'un `id` : une suppression porte toujours sur un match **et**
+   * ses actions, donc sur plusieurs lignes d'une même table.
+   */
+  deleteByIds(ids: readonly string[]): Promise<RemoteResult<unknown>>;
 }
 
 /** Session telle que l'app en a besoin — pas le JWT, pas les quotas. */
@@ -125,6 +132,13 @@ export function createRemote(client: SupabaseClient): RemoteClient {
             rows as Record<string, unknown>[],
             { onConflict: options.onConflict },
           );
+          return { data: result.data, error: toError(result.error) };
+        },
+        deleteByIds: async (ids: readonly string[]) => {
+          // `.in()` plutôt qu'un `eq` par ligne : une seule requête, donc un seul
+          // aller-retour réseau par cycle. Les tables concernées sont indexées sur
+          // `match_id` — voir `supabase/schema.sql`.
+          const result = await builder.delete().in("id", ids as string[]);
           return { data: result.data, error: toError(result.error) };
         },
         select: (columns: string): RemoteQuery => {

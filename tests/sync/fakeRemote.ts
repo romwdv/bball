@@ -21,7 +21,11 @@ export interface FakeRemote {
   /** Contenu courant des tables, indexé par nom de table. */
   tables: Map<string, Record<string, unknown>[]>;
   /** Appels dans l'ordre : `{ op, table, rows }`. */
-  calls: Array<{ op: "upsert" | "select"; table: string; rows?: number }>;
+  calls: Array<{
+    op: "upsert" | "select" | "delete";
+    table: string;
+    rows?: number;
+  }>;
   /** Session courante simulée. */
   session: AuthSession | null;
   /** Erreur à renvoyer pour `upsert`, par nom de table. */
@@ -81,6 +85,21 @@ export function createFakeRemote(
           tables.set(table, existing);
 
           return { data: rows, error: null };
+        },
+
+        async deleteByIds(ids: readonly string[]) {
+          fake.calls.push({ op: "delete", table, rows: ids.length });
+
+          const failure = fake.failOn.get(table);
+          if (failure !== undefined) {
+            return { data: null, error: { message: failure } };
+          }
+
+          const remaining = (tables.get(table) ?? []).filter(
+            (row) => !ids.includes(String(row.id)),
+          );
+          tables.set(table, remaining);
+          return { data: null, error: null };
         },
 
         select(columns: string) {

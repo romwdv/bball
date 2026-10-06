@@ -18,10 +18,24 @@ import type { OutboxEntry, SpaceBunnyDB, SyncEntity } from "@/data/schema";
  *    mutations de la même ligne. Comme le cloud ne connaît que des upserts,
  *    n'envoyer que le dernier état suffit : `enqueue` écrase donc l'entrée
  *    précédente au lieu de s'accumuler.
- * 3. **Aucune opération `delete`.** Le domaine est append-only et une annulation
- *    est un upsert (`voidedAt`). Une entrée décrit donc toutes les mutations
- *    possibles.
+ * 3. **Une seule opération par entrée.** Le domaine est append-only et une
+ *    annulation est un upsert (`voidedAt`) — c'est le cas général. La suppression
+ *    d'un match, décidée explicitement par le coach, est la seule exception, et
+ *    elle partage le même champ `operation`.
+ *
+ * ## Pourquoi une suppression traverse la synchronisation
+ *
+ * Supprimer un match **localement** suffirait à l'écran : il disparaît de
+ * l'historique, et le coach n'y voit plus. Mais il reviendrait au tirage suivant,
+ * car le cloud le renvoie encore — un fantôme impossible à expliquer et à
+ * supprimer ensuite.
+ *
+ * La suppression doit donc être une mutation comme une autre : une entrée
+ * `delete`, acquittée quand le cloud a confirmé.
  */
+
+/** Opération demandée au cloud pour une ligne. */
+export type OutboxOperation = "upsert" | "delete";
 
 /** Corps brut d'une mutation, à upsert côté cloud. */
 export type OutboxPayload = Record<string, unknown>;
@@ -53,6 +67,7 @@ export async function enqueue(
     entity: SyncEntity;
     entityId: string;
     payload: OutboxPayload;
+    operation?: OutboxOperation;
     now?: number;
   },
 ): Promise<string> {
@@ -66,13 +81,37 @@ export async function enqueue(
     id: key,
     entity: entry.entity,
     entityId: entry.entityId,
-    payload: entry.payload,
+    operation: entry.operation ?? "upsert",
+    payload: entry.operation === "delete" ? null : entry.payload,
     createdAt: entry.now ?? Date.now(),
     attempts: previous?.attempts ?? 0,
     lastError: previous?.lastError ?? null,
   });
 
   return key;
+}
+
+/**
+ * Demande la suppression d'une ligne.
+ *
+ * Remplace l'entrée d'upsert si elle existe : c'est le même slot
+ * `entity:entityId`, donc une ligne ne peut pas être à la fois « à créer » et « à
+ * supprimer ». Le `createdAt` repart de maintenant, ce qui place la suppression
+ * en fin de file — le coach a décidé après coup.
+ */
+export async function enqueueDelete(
+  database: SpaceBunnyDB,
+  entity: SyncEntity,
+  entityId: string,
+  now?: number,
+): Promise<string> {
+  return enqueue(database, {
+    entity,
+    entityId,
+    payload: {},
+    operation: "delete",
+    ...(now === undefined ? {} : { now }),
+  });
 }
 
 /**
