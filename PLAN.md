@@ -40,7 +40,7 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 | ---------------------------------- | --- | --- | ------- | ------ | ---------------------------------- |
 | Tir 2 ou 3 pts réussi              | +1  | +1  | +2 / +3 | —      | —                                  |
 | Tir 2 ou 3 pts raté                | +1  | —   | —       | —      | —                                  |
-| Tir réussi + faute sifflée (and-1) | +1  | +1  | +2 / +3 | +1     | +1                                 |
+| Tir réussi + faute sifflée (and-1) | +1  | +1  | +2 / +3 | —      | +1                                 |
 | Tir **raté** + faute sifflée       | —   | —   | —       | —      | +2, ou **+3** si tentative à 3 pts |
 | Lancer réussi                      | —   | —   | +1      | —      | +1                                 |
 | Lancer raté                        | —   | —   | —       | —      | +1                                 |
@@ -53,6 +53,10 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 > Elle ne produit **pas non plus de faute** : la faute est commise par l'adversaire, l'imputer au joueur
 > qui la subit lui compterait une infraction qu'il n'a pas commise. Le gain réel du joueur est en
 > points, via les lancers. Corrigé après test sur le terrain : les boutons comptabilisaient 1 faute.
+>
+> **Aucun tir foulé ne compte de faute, and-1 compris.** La faute n'est attribuée au joueur que
+> lorsqu'elle est saisie seule, sans tir associé. C'est la seule règle, appliquée uniformément aux
+> quatre boutons, et non un cas par cas.
 >
 > La logique est isolée dans une seule fonction pour être trivial à inverser le jour où l'avis change.
 

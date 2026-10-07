@@ -25,12 +25,15 @@ import {
  *
  * La faute n'est pas non plus imputée au joueur : c'est l'adversaire qui la
  * commet. Ce que le joueur obtient, ce sont des points — 2 ou 3 selon le tir
- * d'origine — qui arriveront par les actions `free_throw`.
+ * d'origine, 1 après un panier — qui arriveront par les actions `free_throw`.
+ * C'est vrai **y compris sur l'and-1** : le panier reste une tentative réussie,
+ * mais la faute appartient à l'adversaire. Seule la faute simple, saisie comme
+ * action `foul` sans tir associé, compte au joueur.
  *
  * Conséquence à garder en tête : le total des tentatives ne correspondra pas au
  * total des tirs observés, le % de réussite sera « optimiste » par rapport à la
- * règle FIBA, et les fautes par joueur ne compteront pas les fautes encaissées
- * sur un tir manqué.
+ * règle FIBA, et les fautes par joueur ne compteront que les fautes directement
+ * commises, jamais celles encaissées sur un tir.
  *
  * Si un jour cette règle doit changer, **une seule ligne de `projectShot()` est
  * à modifier**, et les tests de `tests/domain/rules.test.ts` le signalent.
@@ -138,11 +141,10 @@ function projectShot(action: Action): StatDelta {
       delta.fgm3 += 1;
       delta.fga3 += 1;
     }
-    if (fouled) {
-      // And-1 : le panier compte, la faute aussi.
-      // Pas de FTA ici — le lancer sera saisi comme action `free_throw` distincte.
-      delta.fouls += 1;
-    }
+    // Aucune faute, même sur l'and-1 : c'est l'adversaire qui l'a commise. Le
+    // panier reste une tentative réussie, et le lancer dû sera compté par
+    // l'action `free_throw` saisie ensuite — pas de FTA ici, pour éviter le
+    // double comptage.
     return delta;
   }
 

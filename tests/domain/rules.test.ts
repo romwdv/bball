@@ -130,23 +130,25 @@ describe("règles de comptage (table §1 du plan)", () => {
     });
   });
 
-  it("panier + faute (and-1) → panier ET faute comptés, mais aucun FTA", () => {
+  it("panier + faute (and-1) → le panier compte, pas la faute", () => {
     // Le FTA arrive avec l'action `free_throw` saisie ensuite, sinon double comptage.
+    // `fouls: 0` : même and-1, la faute est celle de l'adversaire. Seule la faute
+    // simple, sans tir associé, compte au joueur.
     expectDelta(project(makeAction({ value: 2, made: true, fouled: true })), {
       points: 2,
       fgm2: 1,
       fga2: 1,
-      fouls: 1,
+      fouls: 0,
       fta: 0,
     });
   });
 
-  it("and-1 à 3 points → 3 points, FGM3, et la faute", () => {
+  it("and-1 à 3 points → 3 points, FGM3, aucune faute", () => {
     expectDelta(project(makeAction({ value: 3, made: true, fouled: true })), {
       points: 3,
       fgm3: 1,
       fga3: 1,
-      fouls: 1,
+      fouls: 0,
     });
   });
 
@@ -190,6 +192,22 @@ describe("règles de comptage (table §1 du plan)", () => {
       ),
       { fta: 1, ftm: 0, points: 0 },
     );
+  });
+
+  it("aucun tir foulé ne compte de faute, quelle qu'en soit l'issue", () => {
+    // La règle en une assertion : quatre cas, toujours `fouls: 0`. C'est le
+    // filet qui empêche la faute de revenir par un seul chemin — c'est
+    // exactement comme ça qu'elle était revenue la première fois, sur l'and-1
+    // après avoir été retirée du tir raté.
+    for (const value of [2, 3] as const) {
+      for (const made of [true, false]) {
+        expect(project(makeAction({ value, made, fouled: true })).fouls).toBe(
+          0,
+        );
+      }
+    }
+    // Et la seule source de fautes qui subsiste : la faute simple, sans tir.
+    expect(project(makeAction({ kind: "foul" })).fouls).toBe(1);
   });
 
   it("faute simple → 1 faute, rien d'autre", () => {
@@ -323,16 +341,16 @@ describe("série de lancers après faute sur tir manqué", () => {
 // ---------------------------------------------------------------------------
 
 describe("combos atomiques", () => {
-  it("panier + faute (and-1) ne crée qu'une action, sinon la faute double", () => {
+  it("panier + faute (and-1) ne crée qu'une action, sinon le tir serait compté deux fois", () => {
     const actions = expand(combos.madeAndFouled("p1", 1, "g1", 2));
     expect(actions).toHaveLength(1);
-    expectDelta(sumDeltas(actions), { points: 2, fgm2: 1, fouls: 1 });
+    expectDelta(sumDeltas(actions), { points: 2, fgm2: 1, fouls: 0 });
   });
 
-  it("and-1 à 3 points : une seule action, 3 points + 1 faute", () => {
+  it("and-1 à 3 points : une seule action, 3 points, aucune faute", () => {
     const actions = expand(combos.madeAndFouled("p1", 1, "g1", 3));
     expect(actions).toHaveLength(1);
-    expectDelta(sumDeltas(actions), { points: 3, fgm3: 1, fouls: 1 });
+    expectDelta(sumDeltas(actions), { points: 3, fgm3: 1, fouls: 0 });
   });
 
   it("tir raté + faute : une seule action, aucune statistique", () => {
@@ -355,7 +373,7 @@ describe("combos atomiques", () => {
       ...combos.madeAndFouled("p1", 1, "g1", 3),
       ...combos.freeThrow("p1", 1, "g1", true),
     ]);
-    expectDelta(plan.delta, { points: 4, fgm3: 1, fouls: 1, fta: 1, ftm: 1 });
+    expectDelta(plan.delta, { points: 4, fgm3: 1, fouls: 0, fta: 1, ftm: 1 });
   });
 
   it("tous les combos produisent des actions valides au regard du schéma Zod", () => {

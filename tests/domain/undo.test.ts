@@ -169,16 +169,20 @@ describe("applyUndo", () => {
   it("les statistiques baissent du montant exact du groupe annulé", () => {
     // C'est le test qui garantit qu'undo et statistiques ne divergent pas.
     const before = expand([
-      ...combos.twoMade("p1", 1, "gA"),
-      ...combos.madeAndFouled("p1", 1, "gB", 3),
+      // Une faute simple, avant le groupe annulé : seule celle-là compte au
+      // joueur. Elle est posée avant pour survivre à l'annulation de `gC`.
+      ...combos.foul("p1", 1, "gA"),
+      ...combos.twoMade("p1", 1, "gB"),
+      ...combos.madeAndFouled("p1", 1, "gC", 3),
     ]);
     const after = applyUndo(before, 1000);
     const beforeDelta = sumDeltas(before);
     const afterDelta = sumDeltas(after);
     expect(beforeDelta.points).toBe(5);
     expect(afterDelta.points).toBe(2);
+    // L'and-1 ne compte aucune faute : `beforeDelta.fouls` vient de `gC` seul.
     expect(beforeDelta.fouls).toBe(1);
-    expect(afterDelta.fouls).toBe(0);
+    expect(afterDelta.fouls).toBe(1);
   });
 
   it("ne rend pas les points quand on annule un tir raté", () => {
