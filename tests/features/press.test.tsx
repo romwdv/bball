@@ -554,6 +554,20 @@ describe("CombosBar", () => {
     });
   });
 
+  it("nomme les boutons sans « F » : la faute n'est pas celle du joueur", () => {
+    renderCombos();
+
+    // Les boutons s'appellent `R+2LF` et `R+3LF`, pas `R+F+...` : le `F` laissait
+    // une faute à imputer au joueur qui subit. Le libellé dit ce que le bouton
+    // fait réellement — ouvrir la saisie des lancers dus.
+    expect(
+      screen.getByRole("button", { name: "Tir raté, 2 lancers" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Tir raté, 3 lancers" }),
+    ).toBeInTheDocument();
+  });
+
   it("n'écrit pas de tentative pour le tir raté + faute", async () => {
     const user = userEvent.setup();
     renderCombos();
@@ -564,13 +578,14 @@ describe("CombosBar", () => {
       expect(await repos.actions.countByMatch(matchId)).toBe(1);
     });
 
-    // Règle non-FIBA assumée (PLAN.md §1) : le tir n'existe pas dans les stats,
-    // seule la faute est comptée.
+    // Règle non-FIBA assumée (PLAN.md §1) : ce tir ne produit aucune statistique.
+    // Ni tentative, ni faute — la faute est celle de l'adversaire. Le bouton ne
+    // sert qu'à ouvrir la saisie des 2 lancers dus.
     const actions = await repos.actions.listByMatch(matchId);
     expect(actions[0]?.made).toBe(false);
     const { aggregateFor } = await import("@/domain/stats");
     const stats = aggregateFor(actions, "p1");
-    expect(stats.fouls).toBe(1);
+    expect(stats.fouls).toBe(0);
     expect(stats.fga2).toBe(0);
     expect(stats.points).toBe(0);
   });

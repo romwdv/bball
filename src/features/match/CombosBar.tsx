@@ -11,7 +11,7 @@ import type { HapticKind } from "@/features/match/store";
 /**
  * Bandeau de combos (PLAN.md §4).
  *
- * Quatre boutons : `2P+F`, `3P+F`, `R+F+2LF`, `R+F+3LF`.
+ * Quatre boutons : `2P+F`, `3P+F`, `R+2LF`, `R+3LF`.
  *
  * `2P+F` et `3P+F` sont **un seul geste**, pas deux appuis. C'est la seule façon
  * d'enregistrer un and-1 correctement : deux appuis successifs laisseraient un
@@ -23,9 +23,11 @@ import type { HapticKind } from "@/features/match/store";
  * bouton `LF` de la grille, et ce lancer n'était lié à rien — l'annulation
  * groupée ne le regroupait pas avec le panier et la faute qu'il sanctionnait.
  *
- * `R+F+2LF` et `R+F+3LF` : le tir raté n'est pas compté en tentative (règle
- * non-FIBA assumée, PLAN.md §1) ; seule la faute l'est. Le nombre de lancers vient
- * de `awardedFreeThrows()`, jamais d'une constante écrite ici.
+ * `R+2LF` et `R+3LF` : le tir raté ne produit **aucune** statistique — ni
+ * tentative, ni faute (règle non-FIBA assumée, PLAN.md §1 ; la faute est celle de
+ * l'adversaire, elle n'est pas à imputer au joueur). Ces boutons ne servent
+ * qu'à ouvrir la saisie des 2 ou 3 lancers dus, dont le nombre vient de
+ * `awardedFreeThrows()`, jamais d'une constante écrite ici.
  *
  * Chaque combo écrit **une seule action** : l'annulation groupée vient du
  * domaine (`undoScope`), ce composant n'a pas à s'en préoccuper.
@@ -49,7 +51,7 @@ interface ComboDefinition {
 
 /**
  * Aucun combo n'a de « nombre de lancers » : il est **déduit de l'action écrite**
- * par `awardedFreeThrows`. Écrire `1` en dur sur `2P+F` et `2` sur `R+F+2LF`
+ * par `awardedFreeThrows`. Écrire `1` en dur sur `2P+F` et `2` sur `R+2LF`
  * créerait deux vérités qui divergeraient le jour où la règle change.
  */
 const COMBOS: readonly ComboDefinition[] = [
@@ -84,8 +86,8 @@ const COMBOS: readonly ComboDefinition[] = [
     ],
   },
   {
-    label: "R+F+2LF",
-    name: "Tir raté + faute + 2 lancers",
+    label: "R+2LF",
+    name: "Tir raté, 2 lancers",
     haptic: "combo",
     build: (playerId, quarter) => [
       {
@@ -99,8 +101,8 @@ const COMBOS: readonly ComboDefinition[] = [
     ],
   },
   {
-    label: "R+F+3LF",
-    name: "Tir raté + faute + 3 lancers",
+    label: "R+3LF",
+    name: "Tir raté, 3 lancers",
     haptic: "combo",
     build: (playerId, quarter) => [
       {

@@ -52,8 +52,8 @@ function makeInput(): MatchExportInput {
     ...expand(combos.missed("p1", 1, "g2", 2)),
     // Panier 3 pts réussi → 1/1 à 3 pts, 3 pts
     ...expand(combos.threeMade("p1", 2, "g3")),
-    // Tir 3 pts raté + faute → le tir n'est pas compté (règle non-FIBA),
-    // mais la faute, oui.
+    // Tir 3 pts raté + faute → ni le tir ni la faute ne sont comptés
+    // (règle non-FIBA ; la faute est celle de l'adversaire).
     ...expand(combos.missedAndFouled("p1", 3, "g4", 3)),
     // 2 lancers : 1 réussi, 1 raté → 1/2
     ...expand(combos.freeThrow("p1", 3, "g4", true)),
@@ -140,8 +140,9 @@ describe("matchToCsv", () => {
       .split("\r\n")
       .find((line) => line.startsWith("4;Ada;Lovelace"));
     // 6 points = 2 (panier 2 pts) + 3 (panier 3 pts) + 1 (lancer réussi).
-    // 2 fautes = 1 sur le tir fouillé + 1 faute simple.
-    expect(row).toBe("4;Ada;Lovelace;6;1;2;1;1;1;2;2;1;1;1;1;1;1");
+    // 1 seule faute : le tir raté + faute n'en compte aucune, la faute simple
+    // en compte une.
+    expect(row).toBe("4;Ada;Lovelace;6;1;2;1;1;1;2;1;1;1;1;1;1;1");
   });
 
   it("exclut le tir raté + faute des tentatives", () => {
@@ -175,7 +176,7 @@ describe("matchToCsv", () => {
     const csv = matchToCsv(makeInput());
     const lines = csv.split("\r\n");
     // Une seule fois « Total » : trois fois passerait pour trois joueurs.
-    expect(lines[lines.length - 2]).toBe("Total;;;6;1;2;1;1;1;2;2;1;1;1;1;1;1");
+    expect(lines[lines.length - 2]).toBe("Total;;;6;1;2;1;1;1;2;1;1;1;1;1;1;1");
   });
 
   it("échappe un nom contenant un point-virgule", () => {

@@ -41,14 +41,19 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 | Tir 2 ou 3 pts réussi              | +1  | +1  | +2 / +3 | —      | —                                  |
 | Tir 2 ou 3 pts raté                | +1  | —   | —       | —      | —                                  |
 | Tir réussi + faute sifflée (and-1) | +1  | +1  | +2 / +3 | +1     | +1                                 |
-| Tir **raté** + faute sifflée       | —   | —   | —       | +1     | +2, ou **+3** si tentative à 3 pts |
+| Tir **raté** + faute sifflée       | —   | —   | —       | —      | +2, ou **+3** si tentative à 3 pts |
 | Lancer réussi                      | —   | —   | +1      | —      | +1                                 |
 | Lancer raté                        | —   | —   | —       | —      | +1                                 |
 | Faute simple                       | —   | —   | —       | +1     | —                                  |
 
-> **À confirmer par le commanditaire** : la ligne « Tir raté + faute » est **non-FIBA**. En règle FIBA
-> officielle, ce tir compte comme une tentative ratée (FGA +1). Ici il n'est volontairement pas
-> comptabilisé, donc le % de réussite n'est pas pénalisé par ces tirs. C'est un choix assumé.
+> **Décision du commanditaire (2026-10-07)** : la ligne « Tir raté + faute » est **non-FIBA**. En règle
+> FIBA officielle, ce tir compte comme une tentative ratée (FGA +1). Ici il n'est volontairement pas
+> comptabilisé, donc le % de réussite n'est pas pénalisé par ces tirs.
+>
+> Elle ne produit **pas non plus de faute** : la faute est commise par l'adversaire, l'imputer au joueur
+> qui la subit lui compterait une infraction qu'il n'a pas commise. Le gain réel du joueur est en
+> points, via les lancers. Corrigé après test sur le terrain : les boutons comptabilisaient 1 faute.
+>
 > La logique est isolée dans une seule fonction pour être trivial à inverser le jour où l'avis change.
 
 **Stats dérivées** : aucune statistique n'est stockée. On écrit des actions, les stats sont
@@ -201,7 +206,7 @@ Disposition en 3 zones, actions dans la **thumb zone** (bas de l'écran), une se
 │  ├────────────┴────────────┤    │
 │  │ RB  RB+  P  PD  CT  IC  │    │  stats avancées
 ├──────────────────────────────────┤
-│ 2P+F  3P+F  R+F+2LF  R+F+3LF   │  ← bandeau combos scrollable
+│ 2P+F  3P+F   R+2LF   R+3LF    │  ← bandeau combos scrollable
 └──────────────────────────────────┘
 ```
 
@@ -1155,7 +1160,7 @@ l'état en attendant ; toute réponse contraire déclenche une correction.
 1. **Service worker artisanal plutôt que Serwist** — confirmé ?
    `output: 'export'` + Turbopack (défaut Next 16) est incompatible avec Serwist, qui imposerait
    `next build --webpack` et un plugin non validé sur Next 16.
-2. **Règle non-FIBA sur le tir raté + faute** — le tir ne compte pas en FGA. Confirmé comme
+2. **Règle non-FIBA sur le tir raté + faute** — le tir ne compte ni en FGA ni en faute. Confirmé comme
    choix délibéré ?
 3. **Verrouillage de l'app hors session** — pas de saisie de match sans compte. Confirmé ?
 4. **SMTP** — l'écran « mot de passe oublié » est prévu mais ne fonctionnera pas tant qu'aucun

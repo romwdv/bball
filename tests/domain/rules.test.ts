@@ -150,24 +150,29 @@ describe("règles de comptage (table §1 du plan)", () => {
     });
   });
 
-  it("tir RATÉ + faute → NI FGA NI points, seule la faute est comptée", () => {
+  it("tir RATÉ + faute → aucune statistique, pas même la faute", () => {
     // ⚠️ Règle non-FIBA. Ce test verrouille le comportement voulu : le tir ne
     // dégrade pas le % de réussite. Le changer cassera volontairement ce test.
+    //
+    // `fouls: 0` est le point important et le moins évident. La faute est
+    // commise par l'adversaire ; la compter sur le joueur qui la subit lui
+    // imputerait une infraction qu'il n'a pas commise. Le gain réel du joueur
+    // est en points, via les lancers.
     expectDelta(project(makeAction({ value: 2, made: false, fouled: true })), {
       points: 0,
       fgm2: 0,
       fga2: 0,
       fgm3: 0,
       fga3: 0,
-      fouls: 1,
+      fouls: 0,
     });
   });
 
-  it("tir à 3 points raté + faute → non-FIBA : aucun FGA3 malgré 3 lancers dus", () => {
+  it("tir à 3 points raté + faute → non-FIBA : aucun FGA3 ni faute", () => {
     expectDelta(project(makeAction({ value: 3, made: false, fouled: true })), {
       points: 0,
       fga3: 0,
-      fouls: 1,
+      fouls: 0,
     });
   });
 
@@ -291,11 +296,12 @@ describe("série de lancers après faute sur tir manqué", () => {
       ...combos.freeThrow("p1", 1, "g2", true),
       ...combos.freeThrow("p1", 1, "g2", true),
     ]);
+    // `fouls: 0` : la série vaut des points, pas une infraction pour le joueur.
     expectDelta(sumDeltas([shot!, ...ft]), {
       fta: 2,
       ftm: 2,
       points: 2,
-      fouls: 1,
+      fouls: 0,
       fga2: 0,
     });
   });
@@ -307,7 +313,7 @@ describe("série de lancers après faute sur tir manqué", () => {
       fta: 1,
       ftm: 1,
       points: 1,
-      fouls: 1,
+      fouls: 0,
     });
   });
 });
@@ -329,10 +335,12 @@ describe("combos atomiques", () => {
     expectDelta(sumDeltas(actions), { points: 3, fgm3: 1, fouls: 1 });
   });
 
-  it("tir raté + faute : une seule action, aucun tir comptabilisé", () => {
+  it("tir raté + faute : une seule action, aucune statistique", () => {
     const actions = expand(combos.missedAndFouled("p1", 1, "g1", 2));
     expect(actions).toHaveLength(1);
-    expectDelta(sumDeltas(actions), { fouls: 1, fga2: 0, points: 0 });
+    // L'action existe pour porter le `groupId` des lancers et pour le fil du
+    // match, mais elle ne produit ni tentative ni faute.
+    expectDelta(sumDeltas(actions), { fouls: 0, fga2: 0, points: 0 });
   });
 
   it("toutes les actions d'un combo partagent le même groupId", () => {
@@ -616,7 +624,8 @@ describe("pourcentages", () => {
     );
     // 1 réussi sur 1 tenté : 100 %, et non 50 %.
     expect(twoPointsPercentage(stats)).toBe(100);
-    expect(stats.fouls).toBe(1);
+    // Et aucune faute : le tir manqué sur faute appartient à l'adversaire.
+    expect(stats.fouls).toBe(0);
   });
 
   it("fieldGoalsMade / Attempted agrègent les deux zones", () => {

@@ -16,16 +16,21 @@ import {
  * ⚠️ DÉCISION MÉTIER NON STANDARD — à lire avant de modifier cette fonction
  * ─────────────────────────────────────────────────────────────────────────────
  *
- * Le tir **raté** sur lequel une faute est sifflée **ne compte pas** comme
- * tentative ratée (FGA). Il ne produit que +1 faute.
+ * Le tir **raté** sur lequel une faute est sifflée **ne produit aucune
+ * statistique** : ni tentative, ni faute.
  *
  * En règle FIBA officielle, ce tir compte comme une tentative ratée (FGA +1).
  * Ici il est volontairement écarté, si bien que le pourcentage de réussite du
  * joueur n'est pas pénalisé par ces tirs.
  *
+ * La faute n'est pas non plus imputée au joueur : c'est l'adversaire qui la
+ * commet. Ce que le joueur obtient, ce sont des points — 2 ou 3 selon le tir
+ * d'origine — qui arriveront par les actions `free_throw`.
+ *
  * Conséquence à garder en tête : le total des tentatives ne correspondra pas au
- * total des tirs observés, et le % de réussite sera « optimiste » par rapport à
- * la règle FIBA.
+ * total des tirs observés, le % de réussite sera « optimiste » par rapport à la
+ * règle FIBA, et les fautes par joueur ne compteront pas les fautes encaissées
+ * sur un tir manqué.
  *
  * Si un jour cette règle doit changer, **une seule ligne de `projectShot()` est
  * à modifier**, et les tests de `tests/domain/rules.test.ts` le signalent.
@@ -143,10 +148,13 @@ function projectShot(action: Action): StatDelta {
 
   // Tir raté.
   if (fouled) {
-    // ⚠️ Règle non-FIBA : le tir n'est PAS compté en tentative.
+    // ⚠️ Règle non-FIBA : ce tir ne produit **aucune** statistique.
     // Voir l'avertissement en tête de fichier.
-    // Seule la faute est comptée ; les FTA arriveront avec les lancers saisis.
-    delta.fouls += 1;
+    //
+    // Ni tentative, ni faute. La faute en particulier : c'est l'adversaire qui
+    // la commet, la compter sur le joueur qui subit serait lui imputer une
+    // infraction qu'il n'a pas commise. Les points à 2 ou 3, eux, sont dus et
+    // seront comptés par les actions `free_throw` saisies ensuite.
     return delta;
   }
 
@@ -370,9 +378,13 @@ export const combos = {
    * Tir raté + faute sifflée.
    *
    * ⚠️ Ne crée **pas** d'action `shot` ratée « normale » : ce tir n'existe pas
-   * dans les stats (règle non-FIBA). Une seule action est créée, portant la
-   * faute. Le nombre de lancers dus est renvoyé par `awardedFreeThrows()`, qui
-   * pilote la mini-sheet de saisie.
+   * dans les stats (règle non-FIBA). Une seule action est créée, et elle ne
+   * produit **aucune** statistique — ni tentative, ni faute, puisque c'est
+   * l'adversaire qui a fauté.
+   *
+   * Elle porte néanmoins le `groupId` qui rattache les lancers au tir d'origine,
+   * si bien que l'annulation groupée les reprend tous. Le nombre de lancers dus
+   * est renvoyé par `awardedFreeThrows()`, qui pilote la mini-sheet de saisie.
    */
   missedAndFouled: (
     playerId: string,

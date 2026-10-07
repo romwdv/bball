@@ -9,7 +9,7 @@ import { useMatchStore } from "@/features/match/store";
 /**
  * Mini-sheet de saisie des lancers.
  *
- * Ouverte par les combos `R+F+2LF` et `R+F+3LF`, c'est-à-dire quand un tir
+ * Ouverte par les combos `R+2LF` et `R+3LF`, c'est-à-dire quand un tir
  * manqué est suivi d'une faute. Le nombre de lancers dus vient de
  * `awardedFreeThrows()`, jamais d'un décompte maison : c'est la règle métier du
  * domaine, et la redéfinir dans l'UI créerait deux vérités.
