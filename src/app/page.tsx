@@ -10,6 +10,7 @@ import { formatDate } from "@/features/match/formatDate";
 import { useAuthStore } from "@/features/auth/store";
 import { DeleteMatchButton } from "@/features/match/DeleteMatchButton";
 import { InstallPrompt } from "@/features/pwa/InstallPrompt";
+import { SyncIndicator } from "@/features/sync/SyncIndicator";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
@@ -182,10 +183,21 @@ export default function HomePage() {
       </nav>
 
       {/*
-        Invite à installer, juste au-dessus de la navigation : c'est le dernier
-        endroit de l'écran où elle ne masque aucun contenu, et le premier que le
-        coach voit sans avoir à faire défiler. L'écran d'accueil est aussi le seul
-        moment pertinent — pendant un match, personne n'installe une application.
+        Voyant de synchronisation, au-dessus de la liste.
+
+        C'est l'écran où l'on **supprime** un match, donc le seul endroit où une
+        attente est indiscernable d'une réussite : la suppression est immédiate en
+        local et différée sur le réseau. Sans ce bandeau, « 2 en attente » ne se
+        dit nulle part — et le coach n'a aucun moyen de savoir que son geste
+        n'est pas encore arrivé.
+      */}
+      <SyncIndicator variant="banner" />
+
+      {/*
+        Invite à installer, juste sous le voyant : c'est le dernier endroit de
+        l'écran où elle ne masque aucun contenu, et le premier que le coach voit
+        sans avoir à faire défiler. L'écran d'accueil est aussi le seul moment
+        pertinent — pendant un match, personne n'installe une application.
       */}
       <InstallPrompt />
 

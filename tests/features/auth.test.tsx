@@ -621,6 +621,53 @@ describe("voyant de synchronisation", () => {
     );
   });
 
+  it("prend toute la largeur en bandeau", () => {
+    const { rerender } = render(<SyncIndicator variant="banner" />);
+    const banner = screen.getByTestId("sync-indicator");
+    expect(banner.className).toContain("w-full");
+
+    // Le mode compact existe pour le header du match, où la hauteur se compte en
+    // pixels : pas de bandeau là, ou le carrousel pousse la grille d'actions hors
+    // de l'écran.
+    rerender(<SyncIndicator variant="chip" />);
+    expect(screen.getByTestId("sync-indicator").className).not.toContain(
+      "w-full",
+    );
+  });
+
+  it("propose le retry manuel quand des données attendent", async () => {
+    const store = createRepositories(database);
+    const team = await store.teams.ensureLocal();
+    await store.matches.create(team.id, {
+      opponentName: "BC Nuit",
+      date: "2026-10-06",
+    });
+
+    // Mode avion : le cycle publie l'état sans rien envoyer, donc les mutations
+    // restent en file — exactement la situation d'une suppression hors-ligne.
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+    render(<SyncIndicator variant="banner" />);
+    await act(async () => {
+      await syncNow();
+    });
+
+    // Le retry manuel est ce que le coach fera après un échec réseau ; il doit
+    // être atteignable sans deviner où il se trouve.
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("en attente");
+    expect(screen.getByText("Réessayer")).toBeInTheDocument();
+  });
+
+  it("ne propose pas le retry quand tout est parti", async () => {
+    render(<SyncIndicator variant="banner" />);
+    await act(async () => {
+      await syncNow();
+    });
+
+    // Proposer « Réessayer » en permanence rendrait le bandeau assimilable à une
+    // erreur, alors que tout est synchronisé.
+    expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
+  });
+
   it("nomme la cause en cas d'erreur", async () => {
     remote.failOn.set("players", "violation de politique RLS");
     const store = createRepositories(database);

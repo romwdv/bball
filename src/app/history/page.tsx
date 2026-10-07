@@ -10,6 +10,7 @@ import { QUARTERS, type MatchStatus, type Quarter } from "@/domain/types";
 import { MatchSheet } from "@/features/match/MatchSheet";
 import { formatDate } from "@/features/match/formatDate";
 import { useHistoryData } from "@/features/history/useHistoryData";
+import { SyncIndicator } from "@/features/sync/SyncIndicator";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
@@ -89,6 +90,17 @@ function MatchList() {
           {matches.length} match{matches.length > 1 ? "s" : ""}
         </span>
       </header>
+
+      {/* Voyant de synchronisation : la suppression se fait d'ici, et elle est
+          différée sur le réseau. Sans ce bandeau, une suppression en attente est
+          indiscernable d'une suppression réussie — c'est-à-dire que le coach
+          croirait avoir effacé un match qui reviendra au prochain tirage.
+
+          Affiché même sur un historique vide, et c'est délibéré : le cas
+          « dernier match supprimé, suppression encore en file » fait disparaître
+          la liste. Un bandeau conditionné à `matches.length` masquerait donc
+          précisément l'instant où le coach a le plus besoin de le voir. */}
+      {!loading && <SyncIndicator variant="banner" />}
 
       {loading && <p className="text-sm text-muted">Chargement…</p>}
 

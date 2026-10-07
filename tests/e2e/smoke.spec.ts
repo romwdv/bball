@@ -94,6 +94,30 @@ async function pointsOf(
   );
 }
 
+/** Un match terminé, avec deux actions, prêt à être supprimé. */
+async function seedFinishedMatch(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Nouveau match" }).click();
+  await page.getByLabel("Adversaire").fill("BC Jetable");
+  await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
+  await page.getByLabel("Numéro").fill("4");
+  await page.getByRole("button", { name: "Ajouter au roster" }).click();
+  await page.getByRole("button", { name: "Commencer la saisie" }).click();
+  await expect(page.getByTestId("score")).toBeVisible();
+
+  await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+  await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+  await expect(page.getByTestId("score")).toHaveText("4");
+
+  await page.getByRole("button", { name: "Terminer" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Terminer", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Retour à l'accueil" }),
+  ).toBeVisible();
+}
 test.describe("un match de bout en bout", () => {
   test.setTimeout(60_000);
 
@@ -287,31 +311,6 @@ test.describe("un match de bout en bout", () => {
 test.describe("suppression d'un match", () => {
   test.setTimeout(60_000);
 
-  /** Un match terminé, avec deux actions, prêt à être supprimé. */
-  async function seedFinishedMatch(page: import("@playwright/test").Page) {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
-    await page.getByLabel("Adversaire").fill("BC Jetable");
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
-    await page.getByRole("button", { name: "Commencer la saisie" }).click();
-    await expect(page.getByTestId("score")).toBeVisible();
-
-    await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
-    await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
-    await expect(page.getByTestId("score")).toHaveText("4");
-
-    await page.getByRole("button", { name: "Terminer" }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Terminer", exact: true })
-      .click();
-    await expect(
-      page.getByRole("button", { name: "Retour à l'accueil" }),
-    ).toBeVisible();
-  }
-
   test("demande confirmation, puis efface le match et ses actions", async ({
     page,
   }) => {
@@ -394,5 +393,97 @@ test.describe("suppression d'un match", () => {
     // Les autres matchs sont intacts : la suppression est ciblée.
     await expect(page.getByRole("link", { name: /Reprendre/ })).toHaveCount(0);
     await expect(page.getByText("Aucun match en cours")).toBeVisible();
+  });
+});
+
+test.describe("voyant de synchronisation", () => {
+  test.setTimeout(60_000);
+
+  /**
+   * Le voyant doit exister **partout où une donnée change**, pas seulement là où
+   * le plan le mentionnait — c'est-à-dire le header du match.
+   *
+   * Sans lui sur l'accueil et l'historique, une suppression hors-ligne est
+   * indiscernable d'une suppression réussie : le match disparaît localement, et
+   * rien ne dit qu'il attend encore d'envoyer. Le coach le verrait réapparaître
+   * au tirage suivant sans explication.
+   */
+  test("le voyant est présent sur l'accueil", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "Matchs", exact: true }),
+    ).toBeVisible();
+
+    await expect(page.getByTestId("sync-indicator")).toBeVisible();
+    await expect(page.getByTestId("sync-indicator")).toHaveAttribute(
+      "data-state",
+      /idle|syncing|offline|error/,
+    );
+  });
+
+  test("le voyant est présent sur l'historique", async ({ page }) => {
+    await signIn(page);
+    await seedFinishedMatch(page);
+    await page.goto("/history/");
+
+    await expect(page.getByTestId("sync-indicator")).toBeVisible();
+  });
+
+  test("annonce une suppression encore en attente", async ({
+    page,
+    context,
+  }) => {
+    await signIn(page);
+    await seedFinishedMatch(page);
+
+    await page.goto("/history/");
+    await page
+      .getByRole("button", { name: "Supprimer le match contre BC Jetable" })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Supprimer", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // Suppression réussie et déjà synchronisée : le voyant doit le dire, sinon le
+    // coach ne sait pas s'il peut rouvrir la page web.
+    await expect(page.getByTestId("sync-indicator")).toHaveText("synchronisé");
+
+    // Un match créé hors-ligne, puis supprimé hors-ligne : la suppression
+    // reste en file, et c'est exactement ce que le voyant doit annoncer.
+    await context.setOffline(true);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByLabel("Adversaire").fill("BC Hors-ligne");
+    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
+    await page.getByLabel("Numéro").fill("4");
+    await page.getByRole("button", { name: "Ajouter au roster" }).click();
+    await page.getByRole("button", { name: "Commencer la saisie" }).click();
+    await expect(page.getByTestId("score")).toBeVisible();
+
+    await page.getByRole("button", { name: "Sortir" }).click();
+    await page
+      .getByRole("button", { name: "Supprimer le match contre BC Hors-ligne" })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Supprimer", exact: true })
+      .click();
+    await expect(page.getByText(/vs BC Hors-ligne/)).toHaveCount(0);
+
+    // Le match a disparu de l'écran, mais la suppression n'est pas partie : sans
+    // ce libellé, le coach croirait avoir effacé un match qui reviendra. Et le
+    // bandeau est toujours là malgré la liste vide — c'est le cas où il compte
+    // le plus.
+    const indicator = page.getByTestId("sync-indicator");
+    await expect(indicator).toHaveAttribute("data-state", "offline");
+    // Le compte exact n'intéresse pas : ce qui compte est qu'il soit non nul.
+    // Après création + saisie + sortie + suppression hors-ligne, la file contient
+    // bien plus que la seule suppression.
+    await expect(indicator).toHaveText(/\d+ en attente/);
+
+    await context.setOffline(false);
   });
 });
