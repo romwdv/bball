@@ -34,9 +34,6 @@ test.describe("cibles tactiles", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 
@@ -73,9 +70,6 @@ test.describe("cibles tactiles", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 

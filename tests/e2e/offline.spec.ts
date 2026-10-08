@@ -49,9 +49,6 @@ test.describe("hors-ligne", () => {
     // Un match en cours, pour avoir quoi retrouver hors-ligne.
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
     await page.getByRole("button", { name: /2 points — tap réussi/ }).click();

@@ -76,6 +76,26 @@ export interface PlayerRepository {
     teamId: string,
     players: readonly NewPlayer[],
   ): Promise<PlayerRow[]>;
+  /**
+   * Le joueur unique de l'équipe, **créé si absent**. Idempotent.
+   *
+   * L'application ne suit qu'un seul joueur (PLAN.md §11), donc cette méthode
+   * remplace le roster : elle est le point d'entrée unique de tout ce qui a
+   * besoin d'un joueur, `/new-match` comme `/match`.
+   *
+   * Les trois cas, et pourquoi ils ne se ressemblent pas :
+   *
+   * - **Aucun joueur** → `SON` est créé. C'est le premier lancement.
+   * - **Exactement un** → il est **adopté tel quel**, sans même le réécrire. Un
+   *   `updatedAt` sans raison ferait remonter la ligne en tête du tirage
+   *   descendant côté cloud, et l'indicateur de synchronisation clignoterait pour
+   *   rien. C'est aussi ce qui préserve les actions déjà saisies : elles portent
+   *   son `id`, et un joueur recréé sous un nouvel `id` les rendrait orphelines.
+   * - **Plusieurs** → celui dont l'identité correspond à `SON` est gardé, les
+   *   autres sont supprimés. Ce cas ne peut venir que des données de test, et il
+   *   faut en sortir sans laisser de joueurs fantômes dans le cloud.
+   */
+  ensureSon(teamId: string): Promise<PlayerRow>;
 }
 
 export interface NewMatch {
@@ -337,6 +357,28 @@ class DexieTeamRepository implements TeamRepository {
 // ---------------------------------------------------------------------------
 
 /**
+ * Le joueur unique suivi par l'application.
+ *
+ * L'application ne suit qu'**un seul joueur** — décision du commanditaire
+ * (PLAN.md §11). Son identité est donc une constante du code, pas une donnée
+ * saisie : il n'y a plus d'écran de roster, et un numéro serait une information
+ * à tenir à jour pour rien.
+ *
+ * Conséquence assumée : changer de prénom demande un redéploiement. Le compileur
+ * n'en dit rien, donc la constante porte le prénom en clair — une recherche sur
+ * « Andreas » mène à l'unique endroit où il apparaît.
+ *
+ * `lastName` vide et `number` null : `playerLabel()` et les colonnes nullable du
+ * schéma gèrent les deux cas. La contrainte `unique (team_id, number)` tolère
+ * plusieurs `null`, donc l'absence de numéro ne crée pas de conflit.
+ */
+export const SON: NewPlayer = {
+  firstName: "Andreas",
+  lastName: "",
+  number: null,
+};
+
+/**
  * Tri du roster : numéros d'abord, puis par nom.
  *
  * Les joueurs sans numéro vont à la fin : en bord de terrain, un joueur sans
@@ -452,6 +494,58 @@ class DexiePlayerRepository implements PlayerRepository {
 
     return result!;
   }
+
+  async ensureSon(teamId: string): Promise<PlayerRow> {
+    const rows = await this.listByTeam(teamId);
+
+    // Un seul joueur : adopté tel quel. Voir l'interface pour pourquoi cette
+    // branche ne réécrit rien — c'est elle qui préserve les actions existantes.
+    if (rows.length === 1) return rows[0]!;
+
+    // Plusieurs joueurs : celui qui porte l'identité attendue est gardé, les
+    // autres partent. Données de test uniquement — voir l'interface.
+    if (rows.length > 1) {
+      const keeper =
+        rows.find((row) => isSon(row)) ?? rows.find((row) => matchesSon(row));
+
+      await this.database.transaction(
+        "rw",
+        [this.database.players, this.database.outbox],
+        async () => {
+          for (const row of rows) {
+            if (keeper !== undefined && row.id === keeper.id) continue;
+            await this.database.players.delete(row.id);
+            await enqueueDelete(this.database, "players", row.id);
+          }
+        },
+      );
+
+      if (keeper !== undefined) return keeper;
+    }
+
+    return this.create(teamId, SON);
+  }
+}
+
+/** Le joueur porte-t-il déjà l'identité attendue ? */
+function isSon(row: PlayerRow): boolean {
+  return (
+    row.firstName === SON.firstName &&
+    row.lastName === SON.lastName &&
+    row.number === SON.number
+  );
+}
+
+/**
+ * Variante tolérante : seule l'identité affichée compte.
+ *
+ * Sert au choix du joueur à **conserver** quand aucun ne correspond exactement.
+ * Un joueur au même prénom mais porteur d'un numéro hérité des essais doit
+ * être préféré à un joueur totalement inconnu : c'est lui qui porte les actions
+ * déjà saisies.
+ */
+function matchesSon(row: PlayerRow): boolean {
+  return row.firstName === SON.firstName || row.lastName === SON.lastName;
 }
 
 // ---------------------------------------------------------------------------

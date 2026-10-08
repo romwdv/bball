@@ -152,9 +152,7 @@ function firstLoadResources(htmlPath) {
 // ---------------------------------------------------------------------------
 
 if (!statSync(OUT).isDirectory()) {
-  console.error(
-    "out/ est absent. Lancer `pnpm build` avant ce script.",
-  );
+  console.error("out/ est absent. Lancer `pnpm build` avant ce script.");
   process.exit(1);
 }
 
@@ -173,7 +171,10 @@ const firstLoad = [...new Set([...firstLoadResources(homeHtml), ...allCss])]
 
 const firstLoadJs = firstLoad.filter((path) => path.endsWith(".js"));
 const firstLoadKb = firstLoad.reduce((total, path) => total + gzipKb(path), 0);
-const firstLoadJsKb = firstLoadJs.reduce((total, path) => total + gzipKb(path), 0);
+const firstLoadJsKb = firstLoadJs.reduce(
+  (total, path) => total + gzipKb(path),
+  0,
+);
 const cssKb = firstLoad
   .filter((path) => path.endsWith(".css"))
   .reduce((total, path) => total + gzipKb(path), 0);
@@ -184,19 +185,29 @@ const relativeOf = (path) => relative(OUT, path).split(sep).join("/");
 // ---------------------------------------------------------------------------
 
 console.log("Poids gzippé\n");
-console.log(`  premier écran   ${firstLoadKb.toFixed(1)} ko  (budget ${FIRST_LOAD_BUDGET_KB} ko)`);
+console.log(
+  `  premier écran   ${firstLoadKb.toFixed(1)} ko  (budget ${FIRST_LOAD_BUDGET_KB} ko)`,
+);
 console.log(`    dont JS       ${firstLoadJsKb.toFixed(1)} ko`);
 console.log(`    dont CSS      ${cssKb.toFixed(1)} ko`);
-console.log(`  JS total        ${totalJsKb.toFixed(1)} ko  (budget ${TOTAL_JS_BUDGET_KB} ko)`);
+console.log(
+  `  JS total        ${totalJsKb.toFixed(1)} ko  (budget ${TOTAL_JS_BUDGET_KB} ko)`,
+);
 
 if (process.env.BUNDLE_REPORT === "1") {
   console.log("\nDétail du premier écran\n");
   for (const path of firstLoad.sort((a, b) => gzipKb(b) - gzipKb(a))) {
-    console.log(`  ${gzipKb(path).toFixed(1).padStart(7)} ko  ${relativeOf(path)}`);
+    console.log(
+      `  ${gzipKb(path).toFixed(1).padStart(7)} ko  ${relativeOf(path)}`,
+    );
   }
   console.log("\nCinq plus gros chunks du build\n");
-  for (const path of [...allJs].sort((a, b) => gzipKb(b) - gzipKb(a)).slice(0, 5)) {
-    console.log(`  ${gzipKb(path).toFixed(1).padStart(7)} ko  ${relativeOf(path)}`);
+  for (const path of [...allJs]
+    .sort((a, b) => gzipKb(b) - gzipKb(a))
+    .slice(0, 5)) {
+    console.log(
+      `  ${gzipKb(path).toFixed(1).padStart(7)} ko  ${relativeOf(path)}`,
+    );
   }
 }
 

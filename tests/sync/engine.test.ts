@@ -334,8 +334,9 @@ describe("tirage descendant", () => {
     const bad = { ...toCloudRow("players", good), id: newId() };
 
     remote.tables.set("players", [
-      // `last_name` vide : refusé par `PlayerSchema`.
-      { ...bad, last_name: "", updated_at: good.updatedAt + 1 },
+      // Ni prénom ni nom : refusé par `PlayerSchema`, qui exige qu'une des
+      // deux parties porte l'identité (PLAN.md §11).
+      { ...bad, first_name: "", last_name: "", updated_at: good.updatedAt + 1 },
       toCloudRow("players", {
         ...good,
         firstName: "Yanis",

@@ -62,11 +62,11 @@ export function MatchHeader({ match, score }: MatchHeaderProps) {
             aria-selected={value === quarter}
             onClick={() => setQuarter(value as Quarter)}
             // `w-11` = 44 px : la largeur du sélecteur de période est mesurée, pas
-          // supposée. En `w-8` (32 px) les quatre onglets ne respectaient pas la
-          // cible tactile minimale, alors que c'est le seul élément du header
-          // réellement pressé en match — passer de Q1 à Q2 arrive quelques fois
-          // par rencontre.
-          className={`tabular min-h-tap-min w-11 text-sm font-semibold transition-colors ${
+            // supposée. En `w-8` (32 px) les quatre onglets ne respectaient pas la
+            // cible tactile minimale, alors que c'est le seul élément du header
+            // réellement pressé en match — passer de Q1 à Q2 arrive quelques fois
+            // par rencontre.
+            className={`tabular min-h-tap-min w-11 text-sm font-semibold transition-colors ${
               value === quarter
                 ? "bg-accent text-inverse"
                 : "bg-raised text-secondary"

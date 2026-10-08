@@ -14,8 +14,11 @@ import { signIn } from "./auth";
  * et vérifié unitairement sans jamais confirmer que l'app se tient debout.
  */
 
-/** Numéro du maillot du joueur créé pour le test. */
-const PLAYER_NUMBER = "4";
+/**
+ * Le joueur suivi est créé automatiquement (PLAN.md §11) : le parcours E2E n'a
+ * donc plus à l'ajouter. C'est un changement de fond — avant, un test qui oubliait
+ * cette étape créait un match sans joueur et la grille restait morte.
+ */
 
 async function createMatch(
   page: import("@playwright/test").Page,
@@ -24,9 +27,6 @@ async function createMatch(
   await page.goto("/");
   await page.getByRole("button", { name: "Nouveau match" }).click();
   await page.getByLabel("Adversaire").fill("BC Nuit");
-  await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-  await page.getByLabel("Numéro").fill(PLAYER_NUMBER);
-  await page.getByRole("button", { name: "Ajouter au roster" }).click();
   await page.getByRole("button", { name: "Commencer la saisie" }).click();
   await expect(page.getByTestId("score")).toBeVisible();
 }
@@ -142,25 +142,30 @@ test.describe("parcours complet", () => {
     await expect(page.getByText(/Reprendre/)).toHaveCount(0);
   });
 
-  test("ajoute un joueur à un seul nom", async ({ page }) => {
+  test("crée le joueur suivi sans passer par un roster", async ({ page }) => {
     await signIn(page);
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
+
+    // Le joueur n'est jamais demandé (PLAN.md §11) : il est créé au premier
+    // lancement et rappelé en lecture seule. L'écran ne doit proposer aucun
+    // contrôle de roster — c'est la régression que ce test verrouille, pas un
+    // détail d'affichage.
+    await expect(page.getByText("Andreas")).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /Ajouter au roster/ }),
+    ).toHaveCount(0);
+
     await page.getByLabel("Adversaire").fill("Étoile Béziers");
-    await page.getByLabel("Nom du joueur").fill("Dupont");
-    await page.getByLabel("Numéro").fill("12");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
-
-    // Régression : « Dupont » seul était rejeté en silence, le bouton paraissait
-    // mort et le coach ne pouvait plus créer de joueur. Le numéro et le nom sont
-    // dans des nœuds séparés, on cible donc le bouton entier.
-    const row = page.getByRole("button", { name: /Dupont/ });
-    await expect(row).toBeVisible();
-    // Pré-coché : l'équipe locale joue avec ses joueurs habituels.
-    await expect(row).toHaveAttribute("aria-pressed", "true");
-
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
+
+    // La saisie est immédiatement opérationnelle : avant, le coach devait
+    // verrouiller un joueur dans le carrousel, faute de quoi la grille était
+    // morte. C'est le risque que la suppression du carrousel supprime.
     await expect(page.getByTestId("score")).toBeVisible();
+    await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+    await expect(page.getByTestId("score")).toContainText("2");
   });
 });
 
@@ -177,7 +182,9 @@ test.describe("garde-fou d'accès", () => {
     );
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Connexion" }),
+    ).toBeVisible();
     // Ni la grille de saisie, ni la création de match : l'app est verrouillée,
     // pas simplement redirigée.
     await expect(
@@ -198,7 +205,9 @@ test.describe("garde-fou d'accès", () => {
     // pour arriver à l'écran de saisie.
     await page.goto("/match/?m=00000000-0000-4000-8000-000000000002");
 
-    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Connexion" }),
+    ).toBeVisible();
     await expect(page.getByTestId("score")).toHaveCount(0);
   });
 });

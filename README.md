@@ -164,14 +164,15 @@ propre :
 - **[ ] Le clavier.** Sur `/new-match`, le bouton « Commencer la saisie » doit
   rester atteignable quand le clavier s'ouvre. **Non traité** — c'est
   `visualViewport`, laissé hors phase 3.
-- **[ ] Le carrousel.** Faire défiler la liste des joueurs au pouce pendant une
-  saisie, sans qu'un scroll n'enregistre un tir.
+- **[ ] Le bandeau du joueur.** Vérifier qu'il affiche bien le prénom, les points
+  de la période et les pastilles de fautes, et qu'un scroll éventuel n'enregistre
+  aucun tir.
 - **[ ] La fiche de lancers.** Enchaîner `R+F+2LF` puis valider les 2 lancers,
   puis vérifier que le score est bien 2 (et pas 3).
 
 ### 6. Ce que les tests automatisés couvrent déjà
 
-563 tests, 98 % de couverture, 19 tests Playwright. Le geste tap/appui long, les
+618 tests, 98 % de couverture, 24 tests Playwright. Le geste tap/appui long, les
 combos, l'annulation groupée, la cohérence avec les statistiques, le moteur de
 synchronisation (perte de données, ordre de dépendance, curseurs par table,
 backoff), le rattachement des données locales au compte, le manifeste de

@@ -26,10 +26,16 @@ import type { HapticKind } from "@/features/match/store";
 
 export interface ActionGridProps {
   playerId: string;
-  /** Fautes déjà commises par le joueur verrouillé sur la période affichée. */
+  /**
+   * Fautes déjà commises par le joueur suivi, sur **le match entier**.
+   *
+   * Pas sur la période affichée : la limite à cinq est par rencontre, et c'est ce
+   * qui déclenche le blocage du bouton. Un compteur par période laisserait un
+   * joueur sorti en Q1 reprendre le terrain en prenant cinq fautes de plus.
+   */
   playerFouls?: number;
   onRecord: (drafts: readonly ActionDraft[], kind: HapticKind) => Promise<void>;
-  /** Vrai tant qu'aucun joueur n'est verrouillé. */
+  /** Vrai tant que le joueur suivi n'est pas connu. */
   disabled?: boolean;
 }
 

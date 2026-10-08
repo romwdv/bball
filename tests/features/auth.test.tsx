@@ -653,7 +653,9 @@ describe("voyant de synchronisation", () => {
 
     // Le retry manuel est ce que le coach fera après un échec réseau ; il doit
     // être atteignable sans deviner où il se trouve.
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("en attente");
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent(
+      "en attente",
+    );
     expect(screen.getByText("Réessayer")).toBeInTheDocument();
   });
 

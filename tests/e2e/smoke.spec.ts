@@ -29,59 +29,50 @@ import { signIn } from "./auth";
  * « 5 paniers à 2 points » se lit mieux que « cinq » dans le commentaire, mais
  * l'erreur la plus probable ici est d'oublier de mettre à jour la constante en
  * ajoutant une action. Une expression rend le compte impossible à falsifier.
+ *
+ * Un seul joueur est suivi (PLAN.md §11) : plus de changement de joueur en cours
+ * de match, donc plus de constante par joueur. Le test garde le même volume
+ * d'actions et la même vérification du cumul — c'est la logique qui est à
+ * prouver, pas le nombre de joueurs.
  */
 const BINS = 5;
 const THREE_POINTERS = 3;
-const TURING_BINS = 2;
-const TURING_FOULS = 1;
-const TURING_FREE_THROWS = 2;
+/** Paniers enregistrés en période 3, pour séparer période et cumul. */
+const LATE_BINS = 2;
+const FOULS = 1;
+const FREE_THROWS = 2;
 
 /** Un lancer annulé, pour vérifier que l'annulation retire un point. */
-
 /**
  * Total du match, fautes exclues.
  *
- * Lovelace marque tous ses paniers ; Turing marque `TURING_BINS` paniers et ses
- * `TURING_FREE_THROWS` lancers. La faute de Turing ne compte pas — c'est le point
- * des règles métier le plus facile à contredire par erreur, et il est compté ici
- * pour que sa présence soit visible dans le calcul.
+ * La faute ne compte pas — c'est le point des règles métier le plus facile à
+ * contredire par erreur, et il est compté ici pour que sa présence soit visible
+ * dans le calcul.
  */
-const POINTS =
-  2 * BINS + 3 * THREE_POINTERS + 2 * TURING_BINS + TURING_FREE_THROWS;
+const POINTS_FINISHED = 2 * BINS + 3 * THREE_POINTERS + FREE_THROWS;
+
+/** Idem, après les deux paniers enregistrés en période 3. */
+const POINTS = POINTS_FINISHED + 2 * LATE_BINS;
 
 /**
  * Total après l'annulation.
  *
- * Le test annule la dernière action — le second lancer de Turing. La baisse
- * d'exactement un point prouve deux choses : que l'annulation a bien eu lieu, et
- * qu'elle n'a touché **qu'une** action sur les douze. Un `undoScope` mal borné à
- * la période affichée, ou une régression sur le regroupement par `groupId`,
- * ferait bouger le score de plus.
+ * Le test annule la **dernière action écrite**, donc un des paniers de `LATE_BINS`
+ * : la baisse est de deux points, pas d'un. La baisse d'**exactement** deux points
+ * prouve que l'annulation a bien eu lieu, qu'elle n'a touché **qu'une** action, et
+ * que le cumul n'a pas été recalculé sur la seule période affichée. Un `undoScope`
+ * mal borné à la période, ou une régression sur le regroupement par `groupId`,
+ * ferait bouger le score davantage.
  */
-const POINTS_AFTER_UNDO = POINTS - 1;
-
-/** Points de Lovelace : 5 paniers à 2 pts et 3 à 3 pts, tous réussis. */
-const POINTS_LOVELACE = 2 * BINS + THREE_POINTERS * 3;
+const POINTS_AFTER_UNDO = POINTS - 2;
 
 /**
- * Points de Turing : ses paniers et ses lancers, moins le lancer annulé.
- *
- * La faute ne compte pas, et son absence dans cette formule est le test : si
- * quelqu'un la rajoutait, le total ne correspondrait plus.
- */
-const POINTS_TURING = 2 * TURING_BINS + TURING_FREE_THROWS - 1;
-
-/**
- * Points affichés pour un joueur dans le tableau des statistiques cumulées.
+ * Points affichés dans le tableau des statistiques cumulées.
  *
  * Le nom du joueur est un `th` de portée ligne, donc un `rowheader` — il n'est
  * pas compté par `getByRole("cell")`. Les cellules commencent donc à « M » (matchs
  * joués), et les points sont la **deuxième**.
- *
- * Lire par position plutôt que par valeur évite qu'un joueur dont une autre
- * grandeur vaut 19 — le nombre de paniers à 2 points, par exemple — soit confondu
- * avec celui qui a 19 points. C'est exactement ce que renvoie un `getByText("19")`
- * non filtré.
  */
 async function pointsOf(
   page: import("@playwright/test").Page,
@@ -99,9 +90,6 @@ async function seedFinishedMatch(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Nouveau match" }).click();
   await page.getByLabel("Adversaire").fill("BC Jetable");
-  await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-  await page.getByLabel("Numéro").fill("4");
-  await page.getByRole("button", { name: "Ajouter au roster" }).click();
   await page.getByRole("button", { name: "Commencer la saisie" }).click();
   await expect(page.getByTestId("score")).toBeVisible();
 
@@ -133,35 +121,14 @@ test.describe("un match de bout en bout", () => {
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
 
-    // Deux joueurs, ajoutés par la forme rapide : c'est le cas du remplaçant
-    // arrivé en cours de saison, que la création rapide doit couvrir.
-    //
-    // Chaque ajout est **attendu** avant le suivant. Sans cette attente, le
-    // deuxième remplissage peut viser l'ancien nœud pendant que le roster se
-    // réaffiche, et le bouton resterait désactivé sur un nom vide — un échec
-    // intermittent qui n'a rien à voir avec la fonctionnalité testée.
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
-    await expect(page.getByRole("button", { name: /Lovelace/ })).toBeVisible();
-
-    await page.getByLabel("Nom du joueur").fill("Alan Turing");
-    await page.getByLabel("Numéro").fill("7");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
-    await expect(page.getByRole("button", { name: /Turing/ })).toBeVisible();
-
-    // Le roster est pré-coché en entier : c'est le cas habituel, et decocher à
-    // chaque match serait une friction pure.
-    await expect(
-      page.getByRole("button", { name: /Lovelace/ }),
-    ).toHaveAttribute("aria-pressed", "true");
-
+    // Le joueur est créé automatiquement et rappelé en lecture seule : il n'y a
+    // plus rien à cocher. C'est aussi ce qui garantit que la grille est
+    // saisissable immédiatement — plus de carrousel à verrouiller (PLAN.md §11).
+    await expect(page.getByText("Andreas")).toBeVisible();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 
     // ── Saisie ──────────────────────────────────────────────────────────────
-    // Premier joueur verrouillé automatiquement : sinon le coach ouvrirait une
-    // grille morte en attendant un tap qui n'enregistre rien.
     await expect(page.getByTestId("score")).toHaveText("0");
 
     for (let i = 0; i < BINS; i += 1) {
@@ -170,24 +137,12 @@ test.describe("un match de bout en bout", () => {
     for (let i = 0; i < THREE_POINTERS; i += 1) {
       await page.getByRole("button", { name: /3 points — tap réussi/ }).click();
     }
-
-    // Changer de joueur entre deux séries : c'est le geste le plus fréquent en
-    // match, et celui que le garde-fou « joueur verrouillé » doit tenir — sans lui,
-    // la deuxième série irait au joueur précédent.
-    //
-    // Le carrousel est un `tablist`, donc des `tab` et non des `button` : les
-    // confondre ferait échouer le test sur une question de sémantique, pas sur
-    // le comportement.
-    await page.getByRole("tab", { name: /Turing/ }).click();
-    for (let i = 0; i < TURING_BINS; i += 1) {
-      await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
-    }
-    for (let i = 0; i < TURING_FOULS; i += 1) {
+    for (let i = 0; i < FOULS; i += 1) {
       await page
         .getByRole("button", { name: new RegExp(`Faute ${i + 1} sur 5`) })
         .click();
     }
-    for (let i = 0; i < TURING_FREE_THROWS; i += 1) {
+    for (let i = 0; i < FREE_THROWS; i += 1) {
       await page
         .getByRole("button", { name: /Lancer libre — tap réussi/ })
         .click();
@@ -195,40 +150,41 @@ test.describe("un match de bout en bout", () => {
 
     // Le score est dérivé des actions, jamais stocké : c'est lui qui prouve que
     // l'ensemble des règles est cohérent — fautes et lancers compris.
-    await expect(page.getByTestId("score")).toHaveText(String(POINTS));
+    await expect(page.getByTestId("score")).toHaveText(String(POINTS_FINISHED));
 
     // Passage en période 3 : **le score du header ne bouge pas**. C'est un cumul
     // de match, parce que c'est le chiffre que le coach annonce au banc ; il ne
     // doit pas se remettre à zéro en changeant de période.
-    // `exact` sur les onglets de période : le nom accessible d'un joueur commence
-    // par son numéro, donc « 3 » matche aussi « 3pts … Lovelace ». Les onglets de
-    // période sont dans un `tablist` nommé, donc on le scope.
+    //
+    // `exact` sur les onglets de période : « 3 » matcherait aussi « 3 points ».
     const period = page.getByRole("tablist", { name: "Période" });
     await period.getByRole("tab", { name: "3", exact: true }).click();
     await expect(
       period.getByRole("tab", { name: "3", exact: true }),
     ).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("score")).toHaveText(String(POINTS));
+    await expect(page.getByTestId("score")).toHaveText(String(POINTS_FINISHED));
 
-    // En revanche les points **du carrousel** suivent la période : c'est ce que
-    // le coach veut lire pendant un quart temps. Une action enregistrée en Q3
-    // s'ajoute au cumul mais pas aux points de la période affichée.
-    await period.getByRole("tab", { name: "1", exact: true }).click();
+    // Deux paniers de plus, enregistrés **en période 3**. Le cumul du header
+    // monte : une action écrite en Q3 compte comme les autres, ce que le test
+    // ne prouverait pas s'il ne saisissait rien après le changement de période.
+    for (let i = 0; i < LATE_BINS; i += 1) {
+      await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
+    }
     await expect(page.getByTestId("score")).toHaveText(String(POINTS));
 
     // ── Les fautes ne repartent pas à zéro entre les périodes ───────────────
-    // Turing a une faute, prise en Q1. Le compteur doit rester à 1 en Q3 : la
-    // limite à cinq est **par rencontre**. S'il repartait à zéro, un joueur sorti
-    // en Q1 pourrait reprendre le terrain en prenant cinq fautes de plus — et la
-    // feuille de match en compterait dix.
-    const turingTab = page.getByRole("tab", { name: /Turing/ });
-    await expect(turingTab).toHaveAccessibleName(/1\/5/);
-
-    await period.getByRole("tab", { name: "3", exact: true }).click();
-    await expect(turingTab).toHaveAccessibleName(/1\/5/);
-
+    // La limite à cinq fautes est **par rencontre**. Le libellé du bouton FAUTE
+    // porte ce compteur : une faute ayant déjà été saisie en Q1, il affiche
+    // « Faute 2 sur 5 ». S'il repartait à zéro en changeant de période, il
+    // reviendrait à « Faute 1 sur 5 » — et un joueur sorti en Q1 pourrait
+    // reprendre le terrain en prenant cinq fautes de plus, la feuille de match
+    // en comptant dix.
+    const foulButton = page.getByRole("button", { name: /Faute 2 sur 5/ });
+    await expect(foulButton).toBeVisible();
     await period.getByRole("tab", { name: "2", exact: true }).click();
-    await expect(turingTab).toHaveAccessibleName(/1\/5/);
+    await expect(foulButton).toBeVisible();
+    await period.getByRole("tab", { name: "4", exact: true }).click();
+    await expect(foulButton).toBeVisible();
 
     // ── Annulation ──────────────────────────────────────────────────────────
     // `exact` : le header porte aussi un bouton « Annuler la dernière action »,
@@ -287,24 +243,20 @@ test.describe("un match de bout en bout", () => {
     // ajouter un bouton de retour ne serait pas un changement de produit pour
     // le seul sake d'un test.
     await page.goto("/stats/");
-    // Le tableau liste une ligne par joueur : c'est la preuve que les stats
-    // cumulées relisent les actions du match clôturé. Le nom est un `th` de portée
+    // Le tableau liste une ligne par joueur, et il n'y en a qu'une : c'est la
+    // preuve que les stats cumulées relisent les actions du match clôturé et que
+    // le joueur suivi est bien le seul à y figurer. Le nom est un `th` de portée
     // ligne, donc un `rowheader` et non une cellule.
+    await expect(page.getByRole("rowheader")).toHaveCount(1);
     await expect(
-      page.getByRole("rowheader", { name: /Lovelace/ }),
+      page.getByRole("rowheader", { name: /Andreas/ }),
     ).toBeVisible();
-    await expect(page.getByRole("rowheader", { name: /Turing/ })).toBeVisible();
 
     // Les totaux sont recalculés depuis les actions, jamais stockés : ils doivent
     // donc être cohérents avec le score final du match. Un export figé au moment de
     // la clôture donnerait d'autres chiffres — c'est exactement le bug que le
     // modèle append-only est censé rendre impossible.
-    //
-    // Le total du match n'est pas affiché en ligne : on vérifie donc chaque joueur,
-    // et que leur somme redonne le score de la feuille.
-    await expect(pointsOf(page, "Lovelace")).resolves.toBe(POINTS_LOVELACE);
-    await expect(pointsOf(page, "Turing")).resolves.toBe(POINTS_TURING);
-    expect(POINTS_LOVELACE + POINTS_TURING).toBe(POINTS_AFTER_UNDO);
+    await expect(pointsOf(page, "Andreas")).resolves.toBe(POINTS_AFTER_UNDO);
   });
 });
 
@@ -351,9 +303,7 @@ test.describe("suppression d'un match", () => {
     // Le match est absent des **stats cumulées** aussi : ses actions ont été
     // supprimées, pas seulement sa fiche.
     await page.goto("/stats/");
-    await expect(page.getByRole("rowheader", { name: /Lovelace/ })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("rowheader")).toHaveCount(0);
   });
 
   test("supprime aussi un match en cours, depuis l'accueil", async ({
@@ -367,9 +317,6 @@ test.describe("suppression d'un match", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Oublié");
-    await page.getByLabel("Nom du joueur").fill("Alan Turing");
-    await page.getByLabel("Numéro").fill("7");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 
@@ -457,9 +404,6 @@ test.describe("voyant de synchronisation", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Nouveau match" }).click();
     await page.getByLabel("Adversaire").fill("BC Hors-ligne");
-    await page.getByLabel("Nom du joueur").fill("Ada Lovelace");
-    await page.getByLabel("Numéro").fill("4");
-    await page.getByRole("button", { name: "Ajouter au roster" }).click();
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 

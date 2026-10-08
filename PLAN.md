@@ -18,19 +18,19 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 
 ## 1. Décisions produit validées
 
-| Sujet         | Décision                                                                                 |
-| ------------- | ---------------------------------------------------------------------------------------- |
-| Cible         | PWA mobile-first, installable iOS + Android                                              |
-| Format        | 5x5, 4 périodes de 8 min, 5 fautes éliminatoire                                          |
-| Chrono de jeu | **Non implémenté** — seule la sélection de période compte (stats par quart temps)        |
-| Saisie        | Joueur verrouillé + tap = réussi, appui long 400 ms = manqué                             |
-| Périmètre     | Mes joueurs uniquement — **pas** de score adverse, pas de stats adverses                 |
-| Fautes        | Compteur simple (5 pastilles). Pas d'élimination, pas de LF suggérés, pas de bonus       |
-| Effectif      | Une seule équipe, roster persistant enrichi match après match                            |
-| Écrans        | Match en cours, historique des matchs, stats cumulées. **Pas** d'écran scoreboard public |
-| Hors-ligne    | Garanti. Build 100 % statique, source de vérité en IndexedDB                             |
-| Compte        | **Obligatoire.** Email + mot de passe Supabase, confirmation d'email désactivée          |
-| Hébergement   | VPS Coolify, déploiement push depuis GitHub                                              |
+| Sujet         | Décision                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| Cible         | PWA mobile-first, installable iOS + Android                                               |
+| Format        | 5x5, 4 périodes de 8 min, 5 fautes éliminatoire                                           |
+| Chrono de jeu | **Non implémenté** — seule la sélection de période compte (stats par quart temps)         |
+| Saisie        | Joueur unique (`SON`, codé en dur) + tap = réussi, appui long 400 ms = manqué             |
+| Périmètre     | Mes joueurs uniquement — **pas** de score adverse, pas de stats adverses                  |
+| Fautes        | Compteur simple (5 pastilles). Pas d'élimination, pas de LF suggérés, pas de bonus        |
+| Effectif      | Une seule équipe, **un seul joueur suivi** (le fils du coach) — plus de gestion de roster |
+| Écrans        | Match en cours, historique des matchs, stats cumulées. **Pas** d'écran scoreboard public  |
+| Hors-ligne    | Garanti. Build 100 % statique, source de vérité en IndexedDB                              |
+| Compte        | **Obligatoire.** Email + mot de passe Supabase, confirmation d'email désactivée           |
+| Hébergement   | VPS Coolify, déploiement push depuis GitHub                                               |
 
 ### Règles métier à respecter
 
@@ -114,7 +114,7 @@ Next.js 16.3.8 (App Router, output:'export')   routing + outillage, zéro SSR
 React 19.3 + TypeScript strict
 Tailwind CSS v4                                dark natif, tokens de design
 Dexie 4.4 (IndexedDB)                          source de vérité locale
-Zustand 5                                      état UI volatile (joueur verrouillé, période, sheet)
+Zustand 5                                      état UI volatile (joueur, période, sheet)
 Zod 4                                          validation du modèle
 @supabase/supabase-js 2.117                    auth + sync
 Service worker artisanal                        offline
@@ -129,7 +129,7 @@ src/
   domain/      modèle d'action, règles de projection, agrégation, undo  (pur, testé, zéro dépendance)
   data/        schémas Dexie, repositories, outbox
   sync/        client Supabase, moteur de sync, écrans d'auth
-  ui/          composants génériques (Bouton, Jauge, Sheet, CarrouselJoueurs)
+  ui/          composants génériques (Bouton, Jauge, Sheet, Badges)
   features/
     match/     création, saisie en cours, clôture, feuille de match
     history/   liste des matchs
@@ -199,8 +199,8 @@ Disposition en 3 zones, actions dans la **thumb zone** (bas de l'écran), une se
 ┌──────────────────────────────────┐
 │ Q2  [undo]  38 - 24   ⚡ sync    │  header compact
 ├──────────────────────────────────┤
-│ 4 Martin ████ 12 │ 7 Dubois ●● │  ← carrousel joueurs scrollable,
-│ 9 Bernard ▪ │ 5 Petit ████████ │    n° + live stats + pastilles de fautes
+│ Andreas 12 2/5            ●●○○   │  ← bandeau du joueur : points de la
+│                                 │    période, pastilles de fautes
 ├──────────────────────────────────┤
 │  ┌────────────┬────────────┐    │
 │  │    2 PTS   │    3 PTS   │    │  cibles ≥ 88px
@@ -214,9 +214,14 @@ Disposition en 3 zones, actions dans la **thumb zone** (bas de l'écran), une se
 └──────────────────────────────────┘
 ```
 
-**Le joueur verrouillé** : après sélection, le joueur reste actif. Les actions suivantes s'y
-appliquent sans re-sélectionner. Un tap sur un autre joueur change le verrou. C'est ce qui rend
-rapide une série de paniers du même joueur.
+> **Évolution §11.** Ce schéma date de la version multi-joueurs : la deuxième zone
+> portait un carrousel d'onglets, un par joueur, avec sélection et verrouillage. Elle porte
+> maintenant un bandeau de lecture à une seule ligne, parce qu'il n'y a plus qu'un joueur.
+
+**Le joueur** : la saisie porte toujours sur le même joueur, dont l'identité est une constante
+du code (`SON`, dans `src/data/repositories.ts`). Il n'y a donc plus de verrouillage : le joueur
+est fourni à l'ouverture du match et ne change plus. C'est ce qui supprime le cas « match ouvert,
+aucun joueur verrouillé » — la grille n'a plus jamais besoin d'être désactivée pour cette raison.
 
 **Combos atomiques** : `2P+F` et `3P+F` sont deux boutons distincts. Un tap crée 2 événements liés
 par `groupId` — l'undo les retire ensemble. Un tir manqué avec faute ouvre directement la saisie
@@ -890,13 +895,13 @@ Notes :
 
 |                         |                                                                         |
 | ----------------------- | ----------------------------------------------------------------------- |
-| **Phase courante**      | **Phase 8 — Finition · ✅ Terminée. Projet complet**                    |
+| **Phase courante**      | **Évolution — suivi d'un seul joueur · ✅ terminée**                    |
 | **Prochaine étape**     | Aucune. Déploiement et validation sur téléphone                         |
-| **Dernière action**     | 563 tests + 19 E2E · `pnpm verify` au vert · couverture 98,24 % lignes  |
+| **Dernière action**     | 618 tests + 24 E2E · `pnpm verify` au vert · couverture 98,26 % lignes  |
 | **Phases terminées**    | Phase 0 à Phase 8. **Toutes les portes levées**                         |
 | **Porte de validation** | ✅ Levée — test sur téléphone via l'URL déployée, pas de retour négatif |
 | **Blocage**             | Aucun côté code                                                         |
-| **Prochaine phase**     | Aucune                                                                  |
+| **Prochaine phase**     | Aucune (§11 terminée)                                                   |
 
 ### Ce qui reste à faire, hors code
 
@@ -1391,3 +1396,124 @@ src/app/page.tsx                         bouton sur les matchs en cours
 | 2026-10-06 | —     | `deleteByIds()` regroupe les suppressions d'une table  | Une requête par action doublerait les allers-retours réseau d'une suppression — en gymnase, c'est le seul moment où le réseau manque déjà                                                                                                                                                       |
 | 2026-10-06 | —     | `useHistoryData(revision)` pour forcer la relecture    | `useAsyncData` ne se rejoue pas : sans ça, le match effacé resterait à l'écran — le pire rendu possible pour un bouton « Supprimer »                                                                                                                                                            |
 | 2026-10-06 | —     | `pnpm verify` + couverture + E2E                       | ✅ 593 tests · 21 E2E · 98,25 % lignes, 96,76 % stmts, 96,53 % fonctions, 90,29 % branches. Budget de bundle respecté                                                                                                                                                                           |
+
+---
+
+## 11. Évolution — suivi d'un seul joueur (Andreas)
+
+**Décision du commanditaire (2026-10-08)** : l'application ne suit plus que **le fils du
+coach**, un seul joueur par équipe. Plus de gestion de roster ni de carrousel : la saisie
+porte toujours sur le même joueur. L'identité (prénom seul) est **codée en dur** — pas de
+numéro, pas d'écran de configuration. Les données en base sont des données de test : un
+reset des joueurs parasites est acceptable.
+
+### Pourquoi ce n'est pas une refonte
+
+Tout le moteur de calcul (`src/domain/stats.ts`, `src/domain/rules.ts`) dérive les statistiques
+des actions par `playerId` et fonctionne **à l'identique** avec un seul joueur. La table
+`players`, `matches.player_ids` et `actions.player_id` sont **conservées** : une ligne, un seul
+`uuid`. Le schéma Supabase, le mapping, le moteur de sync et `claimTeam()` ne changent pas.
+
+Ce qui disparaît, c'est l'UI multi-joueurs (roster, carrousel, filtre joueur) — et les fixtures
+de tests. Retirer complètement le concept de joueur serait une refonte du schéma, de la
+migration Dexie, du domaine et de la sync, pour un bénéfice utilisateur nul.
+
+### Liste de tâches
+
+- [x] `src/domain/stats.ts` — `playerLabel()` : retourner `firstName` seul quand
+      `lastName === ""` (sinon « Andreas » avec une espace parasite en fin de chaîne)
+- [x] `src/domain/types.ts` — `PlayerSchema` : les deux moitiés du nom deviennent optionnelles,
+      avec un `refine` qui en exige **une**. Tâche **non prévue au plan**, découverte à
+      l'implémentation : le schéma exigeait un nom de famille non vide, donc `SON` était rejeté
+- [x] `src/data/repositories.ts` — constante `SON = { firstName: "Andreas", lastName: "", number: null }`
+- [x] `src/data/repositories.ts` — `players.ensureSon(teamId)` : exactement 1 joueur →
+      l'adopter (les actions existantes restent valides) ; 0 → créer Andreas ; plusieurs →
+      garder Andreas, supprimer les joueurs parasites
+- [x] `src/app/new-match/page.tsx` — supprimer la section roster (cases à cocher, « tout
+      cocher/décocher », formulaire d'ajout rapide, `toggle`, `addQuickPlayer`,
+      `compareByNumber`) ; ligne statique du joueur ; `playerIds: [son.id]`
+- [x] `src/features/match/PlayerCarousel.tsx` → **`ActivePlayer.tsx`** : le carrousel est
+      supprimé, remplacé par une puce de lecture (prénom + `PlayerBadges` + `FoulDots`, aucun
+      numéro) ; `useMatchData` renvoie un joueur et deux valeurs au lieu de deux `Map`
+- [x] `src/features/match/store.ts` — retirer `lockPlayer` ; `playerId` devient un paramètre
+      **obligatoire** d'`openMatch()`
+- [x] `src/app/match/page.tsx` — retirer le carrousel ; le store s'ouvre sur l'`id` du joueur
+      et non sur l'objet, sans quoi la période se remettrait à 1 après chaque panier
+- [x] `src/app/stats/page.tsx` — retirer le champ « Filtrer un joueur » et la branche « aucun
+      joueur ne correspond » ; toast « Export de 1 joueur »
+- [x] Tests unitaires — `screens` (carrousel → puce), `players` (schéma et `playerLabel`),
+      `repositories` (8 tests `ensureSon`), `mapping` et `engine` (lignes invalides) ·
+      nouveau `tests/features/new-match.test.tsx` (7 tests d'écran)
+- [x] Tests E2E — `match`, `smoke`, `offline`, `a11y` : plus d'ajout rapide, plus de changement
+      d'onglet. Le test du smoke passe de 2 joueurs à 1 et vérifie désormais qu'une action
+      écrite en Q3 fait monter le cumul
+- [x] `src/app/globals.css` — le nom de la couleur `--color-base` rend `text-base` ambigu.
+      Documenté au bon endroit. Tâche **non prévue au plan**, trouvée par l'audit AA
+- [x] Vérification finale — `pnpm verify` + `pnpm e2e` au vert
+
+### Ce que l'implémentation a corrigé en plus du plan
+
+Trois écarts, tous trouvés par les tests. Ils sont notés ici parce qu'un plan qui ne
+les prévoit pas n'est pas un plan, seulement une intention.
+
+1. **`PlayerSchema` exigeait un nom de famille.** `SON` ne portait qu'un prénom, donc la
+   validation le rejetait. Deux options : écrire le prénom dans `lastName`, ou assouplir le
+   schéma. La seconde a été retenue — écrire « Andreas » dans un champ nommé `lastName` aurait
+   créé un mensonge dans les données, visible dans l'export CSV et dans le mapping cloud. Les
+   deux moitiés du nom sont maintenant optionnelles, avec un `refine` qui en exige une : un
+   joueur sans prénom **ni** nom reste refusé.
+
+2. **Un effet dépendant de l'objet joueur remitait la période à 1.** `useMatchData` relit la
+   base à chaque écriture et renvoie donc un nouvel objet `player` à chaque panier. Dépendre
+   de cet objet faisait repasser l'effet d'ouverture du store — dont le nettoyage appelle
+   `closeMatch()`, suivi d'un `openMatch()` qui **remet `quarter` à 1**. Le coach aurait vu le
+   score du header changer de quart temps après chaque tir. Dépendre de `player.id` règle le
+   problème ; c'est le genre de faute que le type ne voit pas et que seul un test d'enchaînement
+   attrape.
+
+3. **`text-base` est une couleur, pas une taille de police.** Le thème définit
+   `--color-base`, donc Tailwind v4 résout `text-base` en `color: var(--color-base)` et
+   n'émet **aucune** `font-size`. Le prénom du joueur s'affichait donc en noir sur fond noir —
+   ratio 1,11, trouvé par l'audit de contraste AA automatisé, invisible à la relecture. Le
+   piège est documenté dans `globals.css`, à l'endroit où `--color-base` est défini.
+
+### Sur les fixtures multi-joueurs : la moitié du chantier était inutile
+
+Le plan prévoyait de passer à un joueur toutes les fixtures de test (`stats`, `sheet`, `claim`,
+`export`). **Elles sont inchangées, et c'est le bon choix** : la table `players` et
+`playerId` sont conservés, donc `createMany`, `findByNumber`, le tri de roster et les
+agrégats par joueur sont toujours du code vivant, testé par du code vivant. Réécrire ces tests
+pour un joueur aurait supprimé de la couverture sur des fonctions qui n'ont pas été retirées.
+
+Un seul fichier de test a réellement cassé : `screens.test.tsx`, qui importait
+`PlayerCarousel`. Trois autres tests affirmaient des règles que l'évolution inverse
+(`lastName` obligatoire, dans `players`, `repositories`, `mapping`, `engine`) — ils ont été
+remplacés, non contournés.
+
+### Volontairement inchangé
+
+`supabase/schema.sql` — la table `players` garde une ligne, `number` reste nullable et le
+`unique (team_id, number)` tolère plusieurs `null` · `src/sync/*` (mapping, engine, claim) ·
+`src/domain/rules.ts` et `src/domain/undo.ts` · `src/features/history/*` ·
+`src/domain/export.ts` — les boucles par joueur produisent une ligne, elles fonctionnent déjà.
+
+### Vérifications effectuées
+
+- `pnpm verify` → au vert, 7 routes `(Static)`, budget respecté
+- `pnpm test` → **618 tests** · `pnpm e2e` → **24 tests Playwright**
+- `pnpm test:coverage` → 98,26 % lignes · 96,85 % stmts · 90,71 % branches · 96,55 % fonctions
+- `pnpm format:check` → conforme
+- **Premier écran : 379,7 ko gzippés** (budget 400 ko) · JS total 410,3 ko (budget 500 ko)
+
+### Journal de l'évolution
+
+| Date       | Action                                                | Résultat                                                                                                                                                                                                                                                                                                                              |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-08 | Décision : un seul joueur suivi (Andreas)             | Identité en dur (prénom seul, pas de numéro), données de test jetables donc reset des joueurs parasites acceptable. Deux options écartées : écran de configuration au premier lancement, et suppression du concept de joueur dans le schéma. Plan validé                                                                              |
+| 2026-10-08 | `PLAN.md` mis à jour                                  | Section 11 créée, liste de tâches prête. `supabase/schema.sql`, la sync et le domaine restent intacts — le chantier porte sur l'UI et les fixtures de tests                                                                                                                                                                           |
+| 2026-10-08 | Écart au plan : `PlayerSchema` assoupli               | Le schéma exigeait un nom de famille, donc `SON` était rejeté. Écrire le prénom dans `lastName` aurait mis un mensonge dans les données et dans l'export CSV. Les deux moitiés du nom sont optionnelles, un `refine` en exige une                                                                                                     |
+| 2026-10-08 | 🔴 `openMatch()` en dépendance de l'objet joueur      | `useMatchData` renvoie un nouvel objet à chaque écriture : l'effet d'ouverture repassait après chaque panier, et son nettoyage `closeMatch()` suivi d'`openMatch()` remettait la période à 1. Le coach aurait vu le score du header changer de quart temps après chaque tir. Dépendre de `player.id` corrige ; le type ne voyait rien |
+| 2026-10-08 | 🔴 `text-base` est une couleur, pas une taille        | Le thème définit `--color-base`, donc Tailwind v4 lit `text-base` comme `color` et n'émet aucune `font-size`. Le prénom s'affichait noir sur noir, ratio 1,11. Trouvé par l'audit AA automatisé, pas à la relecture. Piège documenté dans `globals.css`                                                                               |
+| 2026-10-08 | Un seul fichier de test cassé, pas sept               | `screens.test.tsx` importait `PlayerCarousel`. Les fixtures multi-joueurs de `stats`, `sheet`, `claim` et `export` sont **conservées** : `createMany`, `findByNumber` et les agrégats par joueur sont toujours du code vivant, les réécrire aurait supprimé de la couverture sur du code non retiré                                   |
+| 2026-10-08 | Le smoke test passe à un joueur, et gagne un contrôle | Le changement de joueur en cours de match disparaît. Pour ne pas perdre de couverture sur le cumul, deux paniers sont désormais saisis **après** passage en Q3 : le score du header doit monter, ce que le test ne prouvait pas auparavant                                                                                            |
+| 2026-10-08 | `pnpm verify` + couverture + E2E                      | ✅ 618 tests · 24 E2E · 98,26 % lignes, 96,85 % stmts, 90,71 % branches · premier écran 379,7 ko pour un budget de 400 ko                                                                                                                                                                                                             |

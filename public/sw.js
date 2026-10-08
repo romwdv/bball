@@ -116,7 +116,9 @@ async function precacheAll(cache, files) {
     }),
   );
 
-  const failed = results.filter((result) => result.status === "rejected").length;
+  const failed = results.filter(
+    (result) => result.status === "rejected",
+  ).length;
   if (failed > 0) {
     console.warn(`[sw] ${failed} fichier(s) non précachés sur ${files.length}`);
   }

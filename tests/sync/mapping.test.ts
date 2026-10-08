@@ -197,9 +197,12 @@ describe("retour : colonne cloud → ligne locale", () => {
   });
 
   it("rejette une ligne invalide par le schéma du domaine", () => {
+    // Un joueur sans prénom **ni** nom n'a pas d'identité : c'est le critère
+    // que le schéma conserve depuis PLAN.md §11 (l'un ou l'autre suffit).
     expect(() =>
       fromCloudRow("players", {
         ...toCloudRow("players", PLAYER),
+        first_name: "",
         last_name: "",
       }),
     ).toThrow();

@@ -25,24 +25,26 @@ import { useToastStore } from "@/features/stats/useToastStore";
  *
  * Un tableau, pas des cartes : treize colonnes et une ligne par joueur, c'est la
  * forme qui se compare d'un coup d'œil et qui se trie. Les cartes ne
- * permettraient pas de répondre à « qui a le meilleur pourcentage » sans les
- * faire défiler toutes.
+ * permettraient pas de répondre à « quel est mon pourcentage » sans les faire
+ * défiler toutes.
  *
- * Le tri par colonne est l'interaction principale : le coach cherche un leader,
- * pas une liste alphabetically.
+ * Le tri par colonne est l'interaction principale : le coach cherche une valeur,
+ * pas une liste. Comme il n'y a plus qu'**un joueur** (PLAN.md §11), le champ de
+ * filtre a disparu — un filtre sur une seule ligne ne peut rien exclure. Le tri
+ * reste en place et reste inopérant sur une ligne : c'est la forme de la table
+ * qui reste prête si un jour un deuxième joueur revient.
  */
 
 export default function StatsPage() {
   const { stats, roster, matchCount, loading } = useCumulativeData();
   const [sortKey, setSortKey] = useState<SortKey>("points");
   const [descending, setDescending] = useState(true);
-  const [query, setQuery] = useState("");
   const [averages, setAverages] = useState(false);
   const flash = useToastStore();
 
   const { rows } = useMemo(
-    () => sortAndFilter(stats, roster, sortKey, descending, query),
-    [stats, roster, sortKey, descending, query],
+    () => sortAndFilter(stats, roster, sortKey, descending, ""),
+    [stats, roster, sortKey, descending],
   );
 
   function toggleSort(key: SortKey) {
@@ -52,7 +54,7 @@ export default function StatsPage() {
     }
     // Un nouveau tri démarre toujours par le haut : on cherche le maximum.
     setSortKey(key);
-    setDescending(key !== "name");
+    setDescending(true);
   }
 
   function exportCsv() {
@@ -61,7 +63,9 @@ export default function StatsPage() {
       content: cumulativeToCsv({ players: roster, stats, matchCount }),
       mime: CSV_MIME,
     });
-    flash.show(`Export de ${stats.length} joueurs`);
+    flash.show(
+      `Export de ${stats.length} joueur${stats.length > 1 ? "s" : ""}`,
+    );
   }
 
   return (
@@ -81,23 +85,14 @@ export default function StatsPage() {
       </header>
 
       <div className="mb-3 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filtrer un joueur"
-            aria-label="Filtrer un joueur"
-            className="min-h-tap-min flex-1 rounded-xl border border-edge bg-raised px-4 text-base text-primary outline-none placeholder:text-muted focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={stats.length === 0}
-            className="min-h-tap-min rounded-xl border border-edge-strong bg-raised px-4 text-sm font-medium disabled:opacity-40"
-          >
-            CSV
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={stats.length === 0}
+          className="min-h-tap-min rounded-xl border border-edge-strong bg-raised px-4 text-sm font-medium disabled:opacity-40"
+        >
+          CSV
+        </button>
 
         <div className="flex overflow-hidden rounded-xl border border-edge">
           <ModeButton
@@ -117,9 +112,8 @@ export default function StatsPage() {
 
       {!loading && rows.length === 0 && (
         <p className="mt-6 text-center text-sm text-muted">
-          {stats.length === 0
-            ? "Aucun match terminé : les statistiques apparaîtront après la première clôture."
-            : "Aucun joueur ne correspond à ce filtre."}
+          Aucun match terminé : les statistiques apparaîtront après la première
+          clôture.
         </p>
       )}
 

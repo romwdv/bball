@@ -7,7 +7,7 @@ import { createRepositories, type Repositories } from "@/data/repositories";
 import type { PlayerRow } from "@/data/schema";
 import { FreeThrowSheet } from "@/features/match/FreeThrowSheet";
 import { MatchHeader } from "@/features/match/MatchHeader";
-import { PlayerCarousel, useMatchData } from "@/features/match/PlayerCarousel";
+import { ActivePlayer, useMatchData } from "@/features/match/ActivePlayer";
 import { formatDate, today } from "@/features/match/formatDate";
 import { useMatchStore } from "@/features/match/store";
 import { FoulDots, PlayerBadges } from "@/ui/Badges";
@@ -156,131 +156,96 @@ describe("MatchHeader", () => {
 
 // ---------------------------------------------------------------------------
 
-describe("PlayerCarousel", () => {
+describe("ActivePlayer", () => {
   /**
-   * Construit la Map dans le test, jamais au niveau du `describe` : le roster
-   * est rempli par `beforeEach`, donc il n'existe pas à la phase de collecte des
-   * tests. Les clés sont les vrais identifiants : le carrousel lit la Map telle
-   * quelle, des clés fictives donneraient tous les joueurs à zéro.
+   * Le bandeau est mono-joueur : il ne reçoit qu'un joueur, ses stats et ses
+   * fautes. Deux valeurs suffisent donc, là où le carrousel attendait une Map
+   * par joueur — et c'est tout l'intérêt du changement (PLAN.md §11) : plus de
+   * Map, donc plus de clé `playerId` dans une fixture, donc plus de statistiques
+   * attribuables à un joueur absent du roster.
    */
-  function statsFixture() {
-    return new Map<string, ReturnType<typeof aggregateFor>>([
-      [roster[0]!.id, { ...aggregateFor([], "a"), points: 7 }],
-      [roster[1]!.id, aggregateFor([], "b")],
-    ]);
-  }
-
-  /**
-   * Fautes cumulées du match.
-   *
-   * Séparé des stats de période dans le composant, donc aussi dans la fixture :
-   * mélanger les deux ici masquerait exactement la distinction que la règle des
-   * cinq fautes impose.
-   */
-  function foulsFixture() {
-    return new Map<string, number>([[roster[0]!.id, 3]]);
-  }
-
-  function renderCarousel() {
+  function renderBand() {
     return render(
-      <PlayerCarousel
-        players={roster}
-        statsByPlayer={statsFixture()}
-        foulsByPlayer={foulsFixture()}
-        onSelect={(id) => useMatchStore.getState().lockPlayer(id)}
+      <ActivePlayer
+        player={roster[0]!}
+        stats={{ ...aggregateFor([], "a"), points: 7 }}
+        fouls={3}
       />,
     );
   }
 
-  it("affiche un onglet par joueur du roster", () => {
-    renderCarousel();
-    expect(screen.getAllByRole("tab")).toHaveLength(3);
-  });
-
-  it("marque le joueur verrouillé", () => {
-    useMatchStore.setState({ playerId: roster[1]!.id });
-    renderCarousel();
-
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
-    expect(tabs[0]).toHaveAttribute("aria-selected", "false");
-  });
-
-  it("verrouille le joueur au tap", async () => {
-    const user = userEvent.setup();
-    renderCarousel();
-
-    await user.click(screen.getAllByRole("tab")[2]!);
-
-    expect(useMatchStore.getState().playerId).toBe(roster[2]!.id);
+  it("affiche le prénom du joueur suivi", () => {
+    renderBand();
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
   });
 
   it("affiche les points de la période", () => {
-    renderCarousel();
-    // Le « 7 » apparaît aussi dans le compteur de fautes du joueur voisin
-    // (« 3/5 »), d'où la recherche sur le contenu exact d'un nœud de texte.
+    renderBand();
+    // Le « 7 » apparaît aussi dans le compteur de fautes (« 3/5 »), d'où la
+    // recherche sur le contenu exact d'un nœud de texte.
     expect(
       screen.getAllByText((_c, node) => node?.textContent === "7").length,
     ).toBeGreaterThan(0);
   });
 
   it("affiche les fautes du match entier, pas de la période", () => {
-    renderCarousel();
+    renderBand();
 
-    // Les fautes viennent de `foulsByPlayer`, jamais de `statsByPlayer` :
+    // Les fautes viennent de la prop `fouls`, jamais des stats de période :
     // la limite à cinq est par rencontre. Si le compteur repartait à zéro à
     // chaque période, un joueur sorti en Q1 pourrait prendre cinq fautes de
     // plus, et la feuille de match en compterait dix.
     expect(
-      screen
-        .getAllByText((_c, node) => node?.textContent === "3/5")
-        .length,
+      screen.getAllByText((_c, node) => node?.textContent === "3/5").length,
     ).toBeGreaterThan(0);
   });
 
   it("affiche les pastilles de fautes", () => {
-    renderCarousel();
+    renderBand();
     // Le compteur est rendu en deux nœuds de texte (« 3 » puis « /5 »), donc
     // la recherche se fait sur l'élément parent qui les contient tous les deux.
-    const counters = screen
-      .getAllByText((_content, node) => /\d\/5/.test(node?.textContent ?? ""))
-      .filter((node) => node.children.length === 0 || true);
+    const counters = screen.getAllByText((_content, node) =>
+      /\d\/5/.test(node?.textContent ?? ""),
+    );
     expect(counters.length).toBeGreaterThan(0);
     expect(counters.some((node) => node.textContent === "3/5")).toBe(true);
   });
 
-  it("affiche un tiret quand un joueur n'a pas encore de stats", () => {
-    render(
-      <PlayerCarousel
-        players={roster}
-        statsByPlayer={new Map()}
-        foulsByPlayer={new Map()}
-        onSelect={() => {}}
-      />,
-    );
-    // Un tiret par joueur sans stats, plus celui du numéro absent.
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+  it("affiche un tiret quand le joueur n'a pas encore de stats", () => {
+    render(<ActivePlayer player={roster[0]!} stats={undefined} fouls={0} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
   });
 
-  it("affiche un message quand le roster est vide", () => {
-    render(
-      <PlayerCarousel
-        players={[]}
-        statsByPlayer={new Map()}
-        foulsByPlayer={new Map()}
-        onSelect={() => {}}
-      />,
+  it("ne rend rien tant que le joueur n'est pas connu", () => {
+    // Le cas est transitoire, pas une erreur : la base n'a pas encore répondu.
+    // Rendre une puce vide ferait clignoter l'écran à chaque ouverture.
+    const { container } = render(
+      <ActivePlayer player={null} stats={undefined} fouls={0} />,
     );
-    expect(screen.getByText(/Aucun joueur/)).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it("affiche le numéro du maillot à côté du nom", () => {
-    renderCarousel();
-    // 12 est le numéro du troisième joueur : sa présence prouve que le numéro
-    // est bien rendu, et pas seulement le prénom.
-    expect(
-      screen.getAllByText((_c, node) => node?.textContent === "12").length,
-    ).toBeGreaterThan(0);
+  it("n'expose aucun contrôle de sélection", () => {
+    // Le bandeau a remplacé un carrousel à onglets. Un `tablist` d'un seul
+    // onglet annonce au lecteur d'écran une liste de choix qui n'en est pas
+    // une : c'est le régression que ce test verrouille.
+    renderBand();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  });
+
+  it("n'affiche aucun numéro de maillot", () => {
+    // Le joueur suivi n'a pas de numéro. Un « — » à sa place afficherait un
+    // manque là où il n'y a rien à afficher — et le composant ne rend le numéro
+    // dans aucun cas, donc « 4 » ne doit pas apparaître non plus.
+    render(
+      <ActivePlayer
+        player={{ ...roster[0]!, number: null }}
+        stats={undefined}
+        fouls={0}
+      />,
+    );
+    expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
   });
 });
 
@@ -288,26 +253,26 @@ describe("PlayerCarousel", () => {
 
 describe("useMatchData", () => {
   function Probe({ matchId: id }: { matchId: string | null }) {
-    const { match, players, statsByPlayer, loading } = useMatchData(id);
+    const { match, player, stats, fouls, loading } = useMatchData(id);
     if (loading) return <span>chargement</span>;
     return (
       <div>
         <span data-testid="opponent">{match?.opponentName ?? "—"}</span>
-        <span data-testid="players">{players.length}</span>
-        <span data-testid="points">
-          {[...statsByPlayer.values()].reduce((sum, s) => sum + s.points, 0)}
-        </span>
+        <span data-testid="player">{player?.firstName ?? "—"}</span>
+        <span data-testid="points">{stats?.points ?? 0}</span>
+        <span data-testid="fouls">{fouls}</span>
       </div>
     );
   }
 
-  it("charge le match et son roster", async () => {
+  it("charge le match et son joueur", async () => {
     render(<Probe matchId={matchId} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("opponent")).toHaveTextContent("BC Nuit");
     });
-    expect(screen.getByTestId("players")).toHaveTextContent("3");
+    // Un seul joueur est suivi : la sonde lit le joueur, plus son nombre.
+    expect(screen.getByTestId("player")).toHaveTextContent("Ada");
   });
 
   it("agrège les points de la période courante", async () => {
@@ -373,13 +338,31 @@ describe("useMatchData", () => {
     });
   });
 
+  it("cumule les fautes sur tout le match, pas sur la période", async () => {
+    // La règle des cinq fautes est par rencontre. Un compteur remis à zéro à
+    // chaque quart temps laisserait un joueur sorti en Q1 en prendre cinq de
+    // plus en Q2, et la feuille de match en compterait dix.
+    await repos.actions.append(matchId, [
+      { kind: "foul", playerId: roster[0]!.id, quarter: 1 },
+      { kind: "foul", playerId: roster[0]!.id, quarter: 2 },
+    ]);
+    useMatchStore.setState({ quarter: 2 });
+
+    render(<Probe matchId={matchId} />);
+
+    await waitFor(() => {
+      // Q2 ne contient qu'une faute, le total du match en compte deux.
+      expect(screen.getByTestId("fouls")).toHaveTextContent("2");
+    });
+  });
+
   it("renvoie un état vide sans identifiant de match", async () => {
     render(<Probe matchId={null} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("opponent")).toHaveTextContent("—");
     });
-    expect(screen.getByTestId("players")).toHaveTextContent("0");
+    expect(screen.getByTestId("player")).toHaveTextContent("—");
   });
 });
 

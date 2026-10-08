@@ -44,11 +44,27 @@ describe("nom seul, sans prénom", () => {
     expect(result.success).toBe(true);
   });
 
-  it("PlayerSchema refuse un nom de famille vide", () => {
+  it("PlayerSchema accepte un nom de famille vide si le prénom est présent", () => {
+    // Cas du joueur unique suivi (PLAN.md §11) : l'identité tient dans le
+    // prénom, « Andreas » seul. Exiger un nom de famille n'aurait signifié
+    // qu'une donnée inventée.
     const result = PlayerSchema.safeParse({
       id: "p1",
       teamId: "local",
-      firstName: "Ada",
+      firstName: "Andreas",
+      lastName: "",
+      number: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("PlayerSchema refuse un joueur sans prénom ni nom", () => {
+    // Rendre les deux moitiés optionnelles ne veut pas dire « tout est permis » :
+    // un joueur totalement anonyme n'aurait pas d'identité à afficher.
+    const result = PlayerSchema.safeParse({
+      id: "p1",
+      teamId: "local",
+      firstName: "  ",
       lastName: "  ",
       number: null,
     });
@@ -100,6 +116,42 @@ describe("nom seul, sans prénom", () => {
     };
     expect(playerLabel(withFirst)).toBe("Alan Turing");
     expect(playerShortName(withFirst)).toBe("Alan");
+  });
+
+  it("playerLabel n'ajoute pas d'espace parasite quand le nom manque", () => {
+    // Le joueur suivi n'a qu'un prénom (PLAN.md §11). « Andreas », pas
+    // « Andreas » : l'espace en fin de chaîne se verrait dans le bandeau de
+    // saisie, collée au nom de famille vide.
+    const player = {
+      id: "p1",
+      teamId: "local",
+      firstName: "Andreas",
+      lastName: "",
+      number: null,
+    };
+    expect(playerLabel(player)).toBe("Andreas");
+  });
+
+  it("playerShortName renvoie le prénom quand le nom manque", () => {
+    const player = {
+      id: "p1",
+      teamId: "local",
+      firstName: "Andreas",
+      lastName: "",
+      number: null,
+    };
+    expect(playerShortName(player)).toBe("Andreas");
+  });
+
+  it("playerInitial prend la lettre du prénom", () => {
+    const player = {
+      id: "p1",
+      teamId: "local",
+      firstName: "andreas",
+      lastName: "",
+      number: null,
+    };
+    expect(playerInitial(player)).toBe("A");
   });
 });
 

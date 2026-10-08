@@ -64,6 +64,17 @@
 }
 
 @theme inline {
+  /*
+   * ⚠️ `--color-base` rend la classe utilitaire **`text-base` ambiguë** : Tailwind
+   * v4 résout `text-*` d'abord parmi les couleurs, donc `text-base` produit
+   * `color: var(--color-base)` et **aucune** `font-size`. Un texte qui n'a pas
+   * d'autre classe de couleur devient alors noir sur fond sombre, sans erreur de
+   * build — c'est ce que l'audit de contraste AA a trouvé sur `/new-match`.
+   *
+   * Pour une taille de police, utiliser `text-sm` / `text-lg`, ou une classe
+   * arbitraire `text-[1rem]`. Chaque fois qu'une couleur `text-base` est écrite
+   * sans couleur explicite à côté, c'est presque toujours une erreur.
+   */
   --color-base: var(--surface-base);
   --color-raised: var(--surface-raised);
   --color-overlay: var(--surface-overlay);

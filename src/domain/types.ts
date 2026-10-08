@@ -154,21 +154,33 @@ export type Action = z.infer<typeof ActionSchema>;
 // Entités
 // ---------------------------------------------------------------------------
 
-export const PlayerSchema = z.object({
-  id: z.string().min(1),
-  teamId: z.string().min(1),
-  /**
-   * Prénom. **Peut être vide** : en bord de terrain, on connaît le nom de
-   * famille de tout le monde et le prénom de personne. Exiger les deux rendait
-   * la saisie rapide inutilisable — « Dupont » seul était rejeté en silence.
-   *
-   * `lastName` porte donc l'identité, `firstName` n'est qu'un complément.
-   */
-  firstName: z.string().trim(),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire"),
-  /** Numéro de maillot. Nullable car certains clubs n'en utilisent pas. */
-  number: z.number().int().min(0).max(99).nullable(),
-});
+export const PlayerSchema = z
+  .object({
+    id: z.string().min(1),
+    teamId: z.string().min(1),
+    /**
+     * Prénom. **Peut être vide** : en bord de terrain, on connaît le nom de
+     * famille de tout le monde et le prénom de personne. Exiger les deux rendait
+     * la saisie rapide inutilisable — « Dupont » seul était rejeté en silence.
+     */
+    firstName: z.string().trim(),
+    /**
+     * Nom de famille. **Peut être vide** depuis que l'application ne suit qu'un
+     * seul joueur (PLAN.md §11) : son identité tient dans son prénom, « Andreas »
+     * seul. Exiger un nom de famille n'aurait signifié qu'une donnée inventée, et
+     * une contrainte qu'il faudrait contourner en écrivant le prénom à la place.
+     *
+     * C'est `refine` et non une contrainte de champ : au moins **une** des deux
+     * parties doit porter l'identité, sinon le joueur n'a pas de nom du tout.
+     */
+    lastName: z.string().trim(),
+    /** Numéro de maillot. Nullable car certains clubs n'en utilisent pas. */
+    number: z.number().int().min(0).max(99).nullable(),
+  })
+  .refine(
+    (player) => player.firstName !== "" || player.lastName !== "",
+    "Un joueur doit avoir au moins un prénom ou un nom",
+  );
 export type Player = z.infer<typeof PlayerSchema>;
 
 export const MatchStatus = z.enum(["draft", "live", "finished"]);

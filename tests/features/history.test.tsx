@@ -138,9 +138,7 @@ describe("useHistoryData", () => {
     render(<Probe />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("counts")).toHaveTextContent(
-        `${match.id}:2`,
-      );
+      expect(screen.getByTestId("counts")).toHaveTextContent(`${match.id}:2`);
     });
   });
 

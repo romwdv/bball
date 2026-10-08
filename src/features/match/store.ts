@@ -19,9 +19,9 @@ import { describeAction } from "@/domain/stats";
  * État de l'écran de saisie.
  *
  * Volatile par construction : ce store ne contient que ce qui change d'un appui à
- * l'autre — joueur verrouillé, période, fiche ouverte. Tout ce qui doit survivre
- * à un redémarrage est dans IndexedDB, écrit par les repositories. Si une donnée
- * de saisie vivait ici, elle serait perdue au rechargement de la PWA ; c'est
+ * l'autre — joueur, période, fiche ouverte. Tout ce qui doit survivre à un
+ * redémarrage est dans IndexedDB, écrit par les repositories. Si une donnée de
+ * saisie vivait ici, elle serait perdue au rechargement de la PWA ; c'est
  * exactement ce que la phase 7 ne pourra pas rattraper.
  *
  * Le store ne connaît pas le rendu : il expose des actions, et les composants
@@ -46,7 +46,13 @@ export interface FlashNotice {
 
 interface MatchStore {
   matchId: string | null;
-  /** Joueur verrouillé : les actions suivantes s'y appliquent. */
+  /**
+   * Joueur que la saisie attribue — **toujours le même** (PLAN.md §11).
+   *
+   * `null` seulement quand aucun match n'est ouvert. Il est fourni à `openMatch()`
+   * et plus jamais modifié : c'est ce qui permet à `record()` de ne jamais avoir à
+   * charger la base, et à l'écran de ne pas avoir d'état « aucun joueur ».
+   */
   playerId: string | null;
   quarter: Quarter;
   sheet: SheetKind;
@@ -69,9 +75,16 @@ interface MatchStore {
   /** Incrémenté à chaque écriture pour forcer le rechargement des statistiques. */
   revision: number;
 
-  openMatch: (matchId: string, playerId?: string | null) => void;
+  /**
+   * Ouvre un match et fixe le joueur qui recevra la saisie.
+   *
+   * Le `playerId` est **obligatoire** : il n'y a qu'un joueur suivi (PLAN.md §11),
+   * donc l'écran n'a plus à choisir entre plusieurs onglets. Le passer ici plutôt
+   * que le verrouiller plus tard supprime le cas « match ouvert, aucun joueur
+   * verrouillé », qui obligeait toute la grille à se désactiver.
+   */
+  openMatch: (matchId: string, playerId: string) => void;
   closeMatch: () => void;
-  lockPlayer: (playerId: string) => void;
   setQuarter: (quarter: Quarter) => void;
   openFreeThrowSheet: (groupId: string, due: number) => void;
   closeSheet: () => void;
@@ -144,7 +157,7 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
   flash: null,
   revision: 0,
 
-  openMatch: (matchId, playerId = null) =>
+  openMatch: (matchId, playerId) =>
     set({
       matchId,
       playerId,
@@ -162,8 +175,6 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
       sheetGroupId: null,
       notice: null,
     }),
-
-  lockPlayer: (playerId) => set({ playerId }),
 
   setQuarter: (quarter) => set({ quarter }),
 

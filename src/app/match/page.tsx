@@ -9,7 +9,7 @@ import { MatchHeader } from "@/features/match/MatchHeader";
 import { FinishSheet } from "@/features/match/FinishSheet";
 import { MatchSheet } from "@/features/match/MatchSheet";
 import { ActionGrid, AdvancedStatsBar } from "@/features/match/ActionGrid";
-import { PlayerCarousel, useMatchData } from "@/features/match/PlayerCarousel";
+import { ActivePlayer, useMatchData } from "@/features/match/ActivePlayer";
 import { useMatchStore } from "@/features/match/store";
 import { repos } from "@/data";
 import { Flash } from "@/ui/Flash";
@@ -20,9 +20,13 @@ import { useWakeLock } from "@/ui/useWakeLock";
  * Écran de saisie — « PORTE DE VALIDATION » (PLAN.md §3).
  *
  * La disposition en trois zones du plan §4 est reprise à l'identique :
- * header compact, carrousel joueurs, grille d'actions en **thumb zone**. Les
+ * header compact, bandeau du joueur, grille d'actions en **thumb zone**. Les
  * actions sont en bas parce que c'est la seule zone atteignable à une main sans
  * changer sa prise du téléphone.
+ *
+ * La zone du milieu a rétréci : elle portait le carrousel de joueurs, il ne reste
+ * qu'un bandeau de lecture (PLAN.md §11). La grille n'a pas bougé pour autant —
+ * elle occupe la thumb zone, et c'est elle qui décide de l'ergonomie.
  *
  * `output: 'export'` interdit les routes dynamiques : le match est identifié
  * par un query param `?m=<uuid>`, pas par un segment de chemin. C'est la
@@ -52,7 +56,6 @@ function MatchScreen() {
 
   const openMatch = useMatchStore((state) => state.openMatch);
   const closeMatch = useMatchStore((state) => state.closeMatch);
-  const lockPlayer = useMatchStore((state) => state.lockPlayer);
   const record = useMatchStore((state) => state.record);
   const undoLast = useMatchStore((state) => state.undoLast);
   const dismissNotice = useMatchStore((state) => state.dismissNotice);
@@ -75,14 +78,20 @@ function MatchScreen() {
    */
   const [confirming, setConfirming] = useState(false);
 
-  const {
-    match,
-    players,
-    statsByPlayer,
-    foulsByPlayer,
-    totalPoints,
-    loading,
-  } = useMatchData(matchId);
+  const { match, player, stats, fouls, totalPoints, loading } =
+    useMatchData(matchId);
+
+  /**
+   * `id` du joueur, et non l'objet.
+   *
+   * `useMatchData` relit la base à chaque écriture et renvoie donc un **nouvel**
+   * objet `player` à chaque fois. Dépendre de l'objet ferait repasser cet effet à
+   * chaque panier — et son nettoyage appelle `closeMatch()`, suivi d'un
+   * `openMatch()` qui **remet la période à 1**. Le coach verrait le score du
+   * header changer de quart temps après chaque tir. L'`id` est stable, donc
+   * l'effet ne tourne que pour un vrai changement de joueur.
+   */
+  const matchPlayerId = player?.id ?? null;
 
   /**
    * Actions actives du match.
@@ -112,30 +121,25 @@ function MatchScreen() {
   // main au milieu d'un quart temps est le pire des ratés d'ergonomie.
   useWakeLock(matchId !== null);
 
-  // Le store doit connaître le match courant pour que `record()` puisse écrire.
-  // C'est fait dans un effet, et non pendant le rendu : écrire un store pendant
-  // le rendu est un effet de bord, interdit par React et source de boucle de
-  // rendu sous `StrictMode`.
+  /**
+   * Le store doit connaître le match et son joueur pour que `record()` puisse
+   * écrire sans relire la base.
+   *
+   * C'est fait dans un effet, et non pendant le rendu : écrire un store pendant
+   * le rendu est un effet de bord, interdit par React et source de boucle de
+   * rendu sous `StrictMode`.
+   *
+   * Le joueur arrive **après** le match, lu par `useMatchData`. Le store n'est
+   * donc ouvert qu'une fois les deux connus, ce qui est correct : tant que le
+   * joueur manque, la grille n'est pas saisissable.
+   */
   useEffect(() => {
-    if (matchId !== null) {
-      openMatch(matchId, null);
-    }
+    if (matchId === null || matchPlayerId === null) return;
+    openMatch(matchId, matchPlayerId);
     return () => {
       closeMatch();
     };
-  }, [matchId, openMatch, closeMatch]);
-
-  // Premier joueur verrouillé automatiquement. Un coach qui ouvre l'app et voit
-  // une grille morte ne déverrouille rien : il faut que le premier joueur soit
-  // déjà actif pour que le premier appui enregistre quelque chose.
-  //
-  // L'effet est déclaré **avant** les retours anticipés, sinon l'ordre des hooks
-  // changerait selon l'état de chargement et React lèverait.
-  useEffect(() => {
-    if (loading) return;
-    if (playerId !== null || players.length === 0) return;
-    lockPlayer(players[0]!.id);
-  }, [loading, playerId, players, lockPlayer]);
+  }, [matchId, matchPlayerId, openMatch, closeMatch]);
 
   if (matchId === null) {
     return (
@@ -169,18 +173,22 @@ function MatchScreen() {
     );
   }
 
+  /**
+   * Le joueur est-il prêt à recevoir la saisie ?
+   *
+   * Il finit par l'être toujours : `ensureSon()` le crée au premier lancement.
+   * Le cas « pas encore » est donc **transitoire**, pas un état d'erreur — l'écran
+   * affiche « Chargement… » et la grille reste désactivée le temps de la lecture.
+   * Ce qui est impossible, en revanche, c'est un match sans joueur : la création
+   * en garantit un (`/new-match` passe `playerIds: [son.id]`).
+   */
   const noPlayer = playerId === null;
 
   return (
     <main className="flex flex-1 flex-col overflow-hidden">
       <MatchHeader match={match} score={totalPoints} />
 
-      <PlayerCarousel
-        players={players}
-        statsByPlayer={statsByPlayer}
-        foulsByPlayer={foulsByPlayer}
-        onSelect={lockPlayer}
-      />
+      <ActivePlayer player={player} stats={stats} fouls={fouls} />
 
       {finished ? (
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-(--padding-safe-b)">
@@ -200,7 +208,11 @@ function MatchScreen() {
               ‹ Accueil
             </button>
           </header>
-          <MatchSheet match={match} players={players} actions={matchActions} />
+          <MatchSheet
+            match={match}
+            players={player === null ? [] : [player]}
+            actions={matchActions}
+          />
         </div>
       ) : (
         <div className="flex flex-1 flex-col justify-end gap-2 pb-3">
@@ -215,7 +227,7 @@ function MatchScreen() {
             // Fautes du match entier : la limite à cinq est par rencontre.
             // Avec le compte de la période, un joueur sorti en Q1 pourrait en
             // prendre cinq de plus en Q2.
-            playerFouls={foulsByPlayer.get(playerId ?? "") ?? 0}
+            playerFouls={fouls}
             disabled={noPlayer}
             onRecord={async (drafts, kind) => {
               await record(drafts, kind);
@@ -262,10 +274,10 @@ function MatchScreen() {
         </div>
       )}
 
-      {confirming && !finished && (
+      {confirming && !finished && player !== null && (
         <FinishSheet
           match={match}
-          players={players}
+          players={[player]}
           actions={matchActions}
           onCancel={() => setConfirming(false)}
           onFinished={() => {
@@ -290,9 +302,8 @@ function MatchScreen() {
 
         - `flash` acquitte **chaque** saisie : 1,1 s, sans bouton. Un tir raté
           ne change ni le score ni aucune pastille ; sans acquittement, le coach
-          ne sait pas si son appui long est passé et il recommence, ou il passe
-          au joueur suivant en croyant le tir compté. Le mot « raté » en gras et
-          une couleur d'alerte le distinguent d'un panier.
+          ne sait pas si son appui long est passé et il recommence. Le mot
+          « raté » en gras et une couleur d'alerte le distinguent d'un panier.
         - `notice` propose « Réfaire » après une annulation : c'est un
           correctif que le coach choisit, pas un acquittement qu'il subit.
       */}

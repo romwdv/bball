@@ -509,14 +509,20 @@ export function describeAction(action: Action): string {
 
 /** Nom d'affichage d'un joueur.
  *
- * Le nom de famille seul si le prénom est inconnu : « Dupont » plutôt que
- * «  Dupont » avec une espace parasite en tête. L'ordre est prénom puis nom
- * parce que c'est ainsi qu'on annonce quelqu'un à voix haute.
+ * Le prénom seul quand le nom de famille est inconnu, le nom de famille seul
+ * quand le prénom l'est — « Dupont » plutôt que «  Dupont » avec une espace
+ * parasite en tête, et « Andreas » plutôt que « Andreas » avec une espace en
+ * queue. Les deux moitiés optionnelles, donc les deux combinaisons doivent
+ * être gérées : l'identité n'a qu'un prénom depuis que l'app suit un seul
+ * joueur.
+ *
+ * L'ordre est prénom puis nom parce que c'est ainsi qu'on annonce quelqu'un à
+ * voix haute.
  */
 export function playerLabel(player: Player): string {
-  return player.firstName === ""
-    ? player.lastName
-    : `${player.firstName} ${player.lastName}`;
+  if (player.firstName === "") return player.lastName;
+  if (player.lastName === "") return player.firstName;
+  return `${player.firstName} ${player.lastName}`;
 }
 
 /**

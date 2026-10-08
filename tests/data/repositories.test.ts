@@ -4,12 +4,14 @@ import {
   createRepositories,
   LOCAL_TEAM_ID,
   quartersOf,
+  SON,
   toAction,
   toMatch,
   toPlayer,
   toTeam,
   type Repositories,
 } from "@/data/repositories";
+import { outboxKey } from "@/data/outbox";
 import { SpaceBunnyDB } from "@/data/schema";
 import { combos } from "@/domain/rules";
 import { aggregateFor, scoreForQuarters } from "@/domain/stats";
@@ -150,10 +152,15 @@ describe("PlayerRepository", () => {
     expect(player).toMatchObject({ firstName: "", lastName: "Dupont" });
   });
 
-  it("refuse un nom de famille vide, même avec un prénom", async () => {
-    await expect(
-      repos.players.create("local", { firstName: "Ada", lastName: "  " }),
-    ).rejects.toThrow(/invalide/i);
+  it("accepte un nom de famille vide quand le prénom est là", async () => {
+    // Règle inversée en PLAN.md §11 : l'identité peut tenir dans le prénom seul.
+    // L'ancien test affirmait le contraire — il encodait la décision de faire
+    // porter le nom au joueur unique, il est donc légitimement remplacé ici.
+    const player = await repos.players.create("local", {
+      firstName: "Ada",
+      lastName: "  ",
+    });
+    expect(player).toMatchObject({ firstName: "Ada", lastName: "" });
   });
 
   it("refuse un numéro hors bornes", async () => {
@@ -298,6 +305,176 @@ describe("PlayerRepository", () => {
       lastName: "Lovelace",
       number: null,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * `ensureSon()` — le joueur unique (PLAN.md §11).
+ *
+ * Ces trois cas ne sont pas des variantes d'un même comportement : ce sont trois
+ *ponses à trois états distincts d'une base, et le choix de la réponse est ce qui
+ * évite de perdre des actions déjà saisies. Le cas « un joueur déjà présent »
+ * est le plus important : c'est lui qui est exécuté à chaque ouverture, et c'est
+ * lui qui ne doit rien écrire.
+ */
+describe("PlayerRepository — ensureSon", () => {
+  it("crée le joueur au premier lancement", async () => {
+    const player = await repos.players.ensureSon("local");
+
+    expect(player.firstName).toBe(SON.firstName);
+    expect(player.lastName).toBe(SON.lastName);
+    expect(player.number).toBeNull();
+    expect(await repos.players.listByTeam("local")).toHaveLength(1);
+  });
+
+  it("est idempotent : deux appels renvoient le même joueur", async () => {
+    const first = await repos.players.ensureSon("local");
+    const second = await repos.players.ensureSon("local");
+
+    expect(second.id).toBe(first.id);
+    expect(await repos.players.listByTeam("local")).toHaveLength(1);
+  });
+
+  it("adopte le joueur existant sans rien réécrire", async () => {
+    // Un `updatedAt` sans raison ferait remonter la ligne en tête du tirage
+    // descendant côté cloud, et l'indicateur de synchronisation clignoterait pour
+    // rien. C'est le test qui verrouille l'absence d'écriture.
+    const existing = await repos.players.create("local", {
+      firstName: "Andreas",
+      lastName: "",
+    });
+    const before = await repos.players.get(existing.id);
+
+    const son = await repos.players.ensureSon("local");
+
+    expect(son.id).toBe(existing.id);
+    expect((await repos.players.get(existing.id))?.updatedAt).toBe(
+      before?.updatedAt,
+    );
+  });
+
+  it("préserve les actions d'un joueur adopté", async () => {
+    // C'est la raison d'être de l'adoption : un joueur recréé sous un nouvel id
+    // laisserait toutes les actions déjà saisies orphelines, et les statistiques
+    // cumulées repartiraient de zéro.
+    const existing = await repos.players.create("local", {
+      firstName: "Andreas",
+      lastName: "",
+    });
+    const match = await repos.matches.create("local", {
+      opponentName: "BC Nuit",
+      date: "2026-10-05",
+      playerIds: [existing.id],
+    });
+    await repos.actions.append(match.id, [
+      {
+        kind: "shot",
+        playerId: existing.id,
+        quarter: 1,
+        value: 3,
+        made: true,
+      },
+    ]);
+
+    const son = await repos.players.ensureSon("local");
+    const actions = await repos.actions.listByMatch(match.id, {
+      includeVoided: false,
+    });
+
+    expect(son.id).toBe(existing.id);
+    expect(aggregateFor(actions, son.id).points).toBe(3);
+  });
+
+  it("écarte les joueurs parasites et garde celui qui porte l'identité", async () => {
+    // Cas des données de test : plusieurs joueurs coexistent, un seul doit
+    // rester, sinon la saisie aurait encore à choisir.
+    await repos.players.create("local", {
+      firstName: "Ada",
+      lastName: "Lovelace",
+    });
+    await repos.players.create("local", { firstName: "Zoe", lastName: "Zzz" });
+    const kept = await repos.players.create("local", {
+      firstName: SON.firstName,
+      lastName: SON.lastName,
+    });
+
+    const son = await repos.players.ensureSon("local");
+    const roster = await repos.players.listByTeam("local");
+
+    expect(son.id).toBe(kept.id);
+    expect(roster.map((player) => player.id)).toEqual([kept.id]);
+  });
+
+  it("écarte aussi les joueurs d'une autre équipe", async () => {
+    // Le prune est borné à l'équipe : `listByTeam` filtre, donc un joueur d'une
+    // autre équipe ne doit jamais être supprimé par cette méthode.
+    await repos.players.create("autre-equipe", {
+      firstName: "Grace",
+      lastName: "Hopper",
+    });
+    await repos.players.create("local", {
+      firstName: "Ada",
+      lastName: "Lovelace",
+    });
+
+    await repos.players.ensureSon("local");
+
+    expect(await repos.players.listByTeam("autre-equipe")).toHaveLength(1);
+  });
+
+  it("conserve le joueur au prénom attendu même avec un numéro hérité", async () => {
+    // Un joueur trouvé par les essais peut porter un numéro. Le strict `isSon`
+    // échouerait, il faut donc un second critère — sans lui, `ensureSon` créerait
+    // un nouveau joueur et les actions de l'ancien deviendraient orphelines.
+    const legacy = await repos.players.create("local", {
+      firstName: SON.firstName,
+      lastName: "",
+      number: 7,
+    });
+    await repos.players.create("local", { firstName: "Zoe", lastName: "Zzz" });
+
+    const son = await repos.players.ensureSon("local");
+
+    expect(son.id).toBe(legacy.id);
+    expect(await repos.players.listByTeam("local")).toHaveLength(1);
+  });
+
+  it("remplace un roster d'essai par le joueur attendu quand aucun ne correspond", () => {
+    // Aucun joueur ne porte l'identité : il n'y a donc aucune action à
+    // préserver. Créer le joueur attendu et purger le reste est le seul résultat
+    // qui laisse une base cohérente.
+    return expect(
+      repos.players
+        .createMany("local", [
+          { firstName: "Ada", lastName: "Lovelace" },
+          { firstName: "Zoe", lastName: "Zzz" },
+        ])
+        .then(() => repos.players.ensureSon("local"))
+        .then(async (son) => {
+          expect(son.firstName).toBe(SON.firstName);
+          expect(await repos.players.listByTeam("local")).toHaveLength(1);
+        }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("met la suppression des parasites en file pour le cloud", async () => {
+    // Sans entrée d'outbox `delete`, le joueur parasite reviendrait au tirage
+    // suivant : un fantôme impossible à expliquer dans l'indicateur de sync.
+    await repos.players.create("local", {
+      firstName: "Ada",
+      lastName: "Lovelace",
+    });
+    const parasite = await repos.players.create("local", {
+      firstName: "Zoe",
+      lastName: "Zzz",
+    });
+
+    await repos.players.ensureSon("local");
+
+    const entry = await database.outbox.get(outboxKey("players", parasite.id));
+    expect(entry?.operation).toBe("delete");
   });
 });
 
@@ -1183,7 +1360,9 @@ describe("suppression d'un match", () => {
     ]);
     expect(deletions.some((entry) => entry.entityId === match.id)).toBe(true);
     for (const action of actions) {
-      expect(deletions.some((entry) => entry.entityId === action.id)).toBe(true);
+      expect(deletions.some((entry) => entry.entityId === action.id)).toBe(
+        true,
+      );
     }
   });
 
@@ -1204,7 +1383,9 @@ describe("suppression d'un match", () => {
     // Une seule opération par ligne : un `delete` ne peut pas cohabiter avec
     // l'`upsert` qu'il remplace, sans quoi le cloud recréerait le match au
     // cycle suivant.
-    expect(concerning.every((entry) => entry.operation === "delete")).toBe(true);
+    expect(concerning.every((entry) => entry.operation === "delete")).toBe(
+      true,
+    );
     expect(
       concerning.filter((entry) => entry.entityId === match.id),
     ).toHaveLength(1);
