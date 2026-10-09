@@ -279,29 +279,88 @@ réellement. `pnpm bundle:detail` affiche le détail par fichier.
 
 ## Déploiement
 
+### Vue d'ensemble
+
+```
+push sur main
+   └─ GitHub Actions : typecheck, lint, tests
+        └─ construction de l'image Docker (build Next inclus)
+             └─ publication sur ghcr.io/romwdv/bball:main
+                  └─ webhook Coolify
+                       └─ docker pull + démarrage du conteneur Nginx
+```
+
+**Le build se fait sur GitHub, pas sur le serveur.** Ce n'est pas une question de
+temps : le build Railpack de Coolify se faisait tuer par le noyau sur un VPS de
+4 Go, parce que Turbopack a un pic de mémoire supérieur. Un déploiement en
+OOM avant d'arriver à son terme est un déploiement raté.
+
+Conséquence directe : le VPS ne reçoit plus qu'une image de ~2 Mo déjà
+compilée. Un déploiement complet prend **environ une minute**, contre 10 à 20
+minutes — et sans jamais échouer par manque de mémoire.
+
+### Secrets
+
+Ce sont des **secrets d'environnement**, dans l'environnement GitHub nommé
+`Bball` (Settings → Environments), et pas des secrets du dépôt. Un job sans
+`environment: Bball` ne les voit pas : les arguments de build partiraient
+vides, sans la moindre erreur, et l'application afficherait un écran
+« synchronisation non configurée » en production.
+
+| Secret | Rôle |
+| ------ | ---- |
+| `NEXT_PUBLIC_SUPABASE_URL` | projet Supabase, lue au build |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | clé publishable, lue au build |
+| `COOLIFY_DEPLOY_WEBHOOK_URL` | déclenche le déploiement Coolify |
+
+Sans le troisième, le build reste vert et l'image est publiée, mais rien n'est
+déployé : le run finit en erreur après cinq tentatives. C'est volontaire — un
+déploiement oublié doit être visible.
+
 ### Coolify
 
-Push depuis GitHub, build sur le serveur, service statique servi par Nginx.
+La ressource est de type **Docker Image**, pas *Application* avec source Git.
+Elle ne se déclenche **jamais** sur push : elle ne réagit qu'à son webhook ou à
+un clic manuel. C'est le workflow GitHub qui l'appelle, une fois l'image
+publiée.
 
-**Variables d'environnement de l'application** (elles sont lues **au build**) :
+- **Image** : `ghcr.io/romwdv/bball:main`
+- **Ports Exposes** : `80` (Nginx dans le conteneur)
+
+⚠️ Une ressource *Docker Image* n'a pas de source Git. Si l'ancienne ressource
+*Application* est conservée, elle se déclenche encore à chaque push et échoue
+en OOM : la couper.
+
+### Rollback
+
+Coolify n'a plus d'historique de commits à rejouer. Changer le tag dans
+**General → Docker Registry** vers le SHA précédent, puis Redeploy.
+
+```bash
+gh run list --workflow=deploy.yml      # repérer le run du bon commit
+```
+
+Un push sur `main` reconstruit et redéploie la version courante ; il ne
+reconstruit pas un commit antérieur.
+
+### Variables d'environnement de l'application
+
+Elles sont lues **au build** : les changer impose un nouveau build et un
+redéploiement, jamais un simple redémarrage.
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<projet>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Modifier ces variables déclenche un redéploiement, pas un simple redémarrage.
-
-**Commande de build** : `pnpm build`
-**Commande de démarrage** : `pnpm start`
-
-`next start` est incompatible avec `output: 'export'` — le projet sert donc
-`out/` via `scripts/serve.mjs`, qui lit `PORT` et `HOST` comme l'attend Railpack.
-
 ### Nginx
 
-Copier **`deploy/nginx.conf`** dans le panneau Coolify, ou monter le fichier dans
-le conteneur Nginx. Adapter `server_name` et l'origine Supabase dans la CSP.
+`deploy/nginx.conf` est embarqué dans l'image : il sert `out/` depuis
+`/var/www/stats-basket/out`, chemin qu'il déclare lui-même. Le fichier reste
+donc valable tel quel s'il est un jour monté dans le panneau Coolify plutôt que
+dans l'image.
+
+Adapter `server_name` et l'origine Supabase dans la CSP.
 
 Le point critique :
 
@@ -313,6 +372,15 @@ Le point critique :
 
 Les assets sous `/_next/static/` portent leur hash de contenu : `immutable` pendant
 un an. Le HTML est toujours revalidé, sinon il pointerait vers un bundle supprimé.
+
+### Vérifier après un déploiement
+
+```bash
+curl -I https://<domaine>/sw.js     # doit renvoyer Cache-Control: no-cache
+```
+
+Un `immutable` ici signifie que le PWA sert une version périmée : invisible au
+déploiement, et le coach le constatera en gymnase.
 
 ### Checklist Supabase
 

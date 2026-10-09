@@ -30,7 +30,7 @@ Convention : une tâche cochée `[x]` est faite **et vérifiée** (`pnpm typeche
 | Écrans        | Match en cours, historique des matchs, stats cumulées. **Pas** d'écran scoreboard public  |
 | Hors-ligne    | Garanti. Build 100 % statique, source de vérité en IndexedDB                              |
 | Compte        | **Obligatoire.** Email + mot de passe Supabase, confirmation d'email désactivée           |
-| Hébergement   | VPS Coolify, déploiement push depuis GitHub                                               |
+| Hébergement   | Image Docker (build sur GitHub Actions), déployée sur le VPS Coolify                    |
 
 ### Règles métier à respecter
 
@@ -1621,3 +1621,9 @@ aucun format de données, aucune route n'a bougé.
 | 2026-10-09 | 🔴 Unhandled error dans `new-match`                             | L'effet `ensureSon` en fire-and-forget pouvait rejeter après la fermeture de la base de test. Rattrapé : `submit()` rappelle `ensureSon` dans son propre `try`, l'erreur ne se perd pas                                                                       |
 | 2026-10-09 | `pnpm verify` + E2E + budget                                     | ✅ 618 tests · 24 E2E · premier écran 381,5 ko (budget 400) · JS total 413,0 ko (budget 500) · format conforme |
 | 2026-10-09 | 🔴 Grille de cartes mal ordonnée (history/?m=)                    | Les cartes `wide` (col-span-2) dans un `grid-cols-3` laissaient des trous : % Tirs passait à la ligne derrière Points. Remplacé par `StatCards` (src/ui), des lignes de 2/3/4/3 cartes, ordre exact de la maquette. Appliqué aussi à /stats |
+| 2026-10-09 | 🔴 Déploiement Coolify tué en OOM (`exit 137`)                    | Le build Railpack tournait sur le VPS (4 Go, 1 Go de swap) et Turbopack dépasse ce pic : swap saturé, 29 min de thrashing, puis mort du noyau. Ce n'était pas un build lent mais un build raté — les 10-20 min observées étaient le même phénomène s'arrêtant juste avant le kill |
+| 2026-10-09 | Build déplacé sur GitHub Actions → image `ghcr.io/romwdv/bball`  | `Dockerfile` en deux étapes : build `node:22-alpine`, service `nginx:alpine` (l'image finale ne contient plus de Node, ~2 Mo). `deploy/nginx.conf` est réutilisé tel quel — son `root` visait déjà `/var/www/stats-basket/out`. Déploiement : ~1 min contre 10-20 |
+| 2026-10-09 | `NODE_ENV` volontairement absent du `Dockerfile`                 | 19 des 30 paquets sont des devDependencies, dont `typescript` et `tailwindcss`, sans lesquels le build échoue. `NODE_ENV=production` les ferait sauter à l'install — Railpack le posait, compensé par `NPM_CONFIG_PRODUCTION=false`. Échec sur un module introuvable, très loin de sa cause |
+| 2026-10-09 | Le workflow déclare `environment: Bball`                          | Les secrets `NEXT_PUBLIC_*` sont des secrets d'**environnement**, invisibles pour un job sans `environment:`. Les build-args seraient partis vides **sans aucune erreur de build** : l'app aurait affiché « synchronisation non configurée » en production |
+| 2026-10-09 | 🔴 Deux tests instables, verts en local et rouges en CI          | `FreeThrowSheet.save()` et `CombosBar.run()` n'écrivent leur état qu'**après** `await record(...)`, donc après IndexedDB — que `user.click` ne garantit pas. Le test de l'and-1 convertissait cette course en `groupId` vide, et l'échec arrivait en validation Zod, 600 lignes de sa cause. CI les a révélés avant le déploiement : c'est le gating qui joue son rôle |
+| 2026-10-09 | Rollback documenté                                             | Une ressource *Docker Image* n'a pas d'historique de commits à rejouer. Le retour arrière se fait en changeant le tag dans Coolify vers le SHA précédent. Un push sur `main` reconstruit la version courante, jamais un commit antérieur |
