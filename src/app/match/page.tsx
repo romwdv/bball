@@ -227,7 +227,7 @@ function MatchScreen() {
           />
         </div>
       ) : (
-        <div className="flex flex-1 flex-col justify-end gap-2 pb-(--padding-safe-b)">
+        <div className="flex flex-1 flex-col gap-8 pb-(--padding-safe-b)">
           <CombosBar
             playerId={playerId}
             disabled={noPlayer}

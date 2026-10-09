@@ -60,7 +60,7 @@ export function ActivePlayer({
   const attempts = stats === undefined ? 0 : fieldGoalsAttempted(stats);
 
   return (
-    <div className="mx-auto w-full max-w-[280px] rounded-[10px] border border-primary/20 bg-raised px-5 py-3">
+    <div className="mx-auto mb-8 w-full max-w-[280px] rounded-[10px] border border-primary/20 bg-raised px-5 py-3">
       <span className="text-sm text-primary">{playerLabel(player)}</span>
 
       <div className="tabular mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-primary">

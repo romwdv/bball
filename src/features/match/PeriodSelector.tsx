@@ -22,7 +22,7 @@ export function PeriodSelector() {
     <div
       role="tablist"
       aria-label="Période"
-      className="flex items-center justify-center gap-[22px]"
+      className="flex items-center mb-8 justify-center gap-[22px]"
     >
       {QUARTERS.map((value) => (
         <button

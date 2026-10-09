@@ -25,7 +25,7 @@ export function MatchHeader({ match }: MatchHeaderProps) {
   const pendingFreeThrows = useMatchStore((state) => state.pendingFreeThrows);
 
   return (
-    <div className="flex items-center justify-between px-4 py-1">
+    <div className="flex items-center justify-between mb-8 px-4 py-1">
       <span
         className="min-w-0 truncate font-display text-[19px] text-primary"
         title={`${formatDate(match.date)} · ${match.status}`}

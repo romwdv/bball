@@ -124,7 +124,7 @@ export function CombosBar({ playerId, disabled, onRecord }: CombosBarProps) {
   const openFreeThrowSheet = useMatchStore((state) => state.openFreeThrowSheet);
 
   return (
-    <div className="scroll-x-touch flex gap-2 px-4">
+    <div className="scroll-x-touch  justify-center flex gap-2 px-4">
       {COMBOS.map((combo) => (
         <ComboButton
           key={combo.label}
