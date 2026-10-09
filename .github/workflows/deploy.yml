@@ -46,6 +46,18 @@ jobs:
     name: Vérifier, construire, publier
     runs-on: ubuntu-latest
 
+    # ⚠️ Indispensable, et rien ne le dit ailleurs.
+    #
+    # Les secrets `NEXT_PUBLIC_*` sont des **secrets d'environnement**
+    # (Settings → Environments → Bball), pas des secrets du dépôt. Or GitHub ne
+    # rend accessibles à un job que les secrets de son environnement déclaré : sans
+    # cette ligne, `secrets.NEXT_PUBLIC_SUPABASE_URL` vaut la chaîne vide, les
+    # `--build-arg` partent vides, et l'image est construite sans configuration —
+    # donc sans le moindre échec, puisque la variable vide est une valeur valide.
+    # Le symptôme n'apparaît qu'en production, sur l'écran « synchronisation non
+    # configurée ».
+    environment: Bball
+
     permissions:
       contents: read
       # Nécessaire pour pousser l'image sur GHCR avec le `GITHUB_TOKEN` :

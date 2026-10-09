@@ -511,6 +511,17 @@ describe("CombosBar", () => {
     await user.click(
       screen.getByRole("button", { name: /Panier 2 points \+ faute/ }),
     );
+
+    // Attendre l'ouverture de la fiche, pas cliquer et lire : `CombosBar.run()`
+    // n'appelle `openFreeThrowSheet` qu'**après** `await onRecord(...)`,
+    // c'est-à-dire après l'écriture dans IndexedDB. Lire `sheetGroupId` juste
+    // après `user.click` est une course — gagne sur une machine rapide, perd
+    // sur un runner CI chargé. Le `?? ""` ci-dessous transforme alors ce raté
+    // en échec de validation Zod, très loin de sa cause : c'est ce qui rendait
+    // le message incompréhensible.
+    await waitFor(() => {
+      expect(useMatchStore.getState().sheet).toBe("free-throws");
+    });
     const sheetGroupId = useMatchStore.getState().sheetGroupId;
 
     // Sans ce lien, annuler ne retirait que le lancer, laissant un panier
@@ -595,6 +606,14 @@ describe("CombosBar", () => {
     renderCombos();
 
     await user.click(screen.getByRole("button", { name: /2 lancers/ }));
+
+    // Même raison que pour l'and-1 ci-dessus : `openFreeThrowSheet` n'est appelé
+    // qu'après `await onRecord(...)`, donc après l'écriture dans IndexedDB. Lire
+    // `sheetGroupId` sans attendre la fiche, c'est une course qui passe en
+    // local et échoue en CI.
+    await waitFor(() => {
+      expect(useMatchStore.getState().sheet).toBe("free-throws");
+    });
     const sheetGroupId = useMatchStore.getState().sheetGroupId;
 
     const written = await useMatchStore.getState().record(
