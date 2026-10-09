@@ -15,7 +15,12 @@ import { FoulDots, PlayerBadges } from "@/ui/Badges";
 import { Flash } from "@/ui/Flash";
 import { Sheet } from "@/ui/Sheet";
 import { Toast } from "@/ui/Toast";
-import { aggregateFor, describeAction } from "@/domain/stats";
+import {
+  aggregateFor,
+  describeAction,
+  emptyPlayerStats,
+  type PlayerStats,
+} from "@/domain/stats";
 import { QUARTERS } from "@/domain/types";
 
 let counter = 0;
@@ -163,12 +168,22 @@ describe("ActivePlayer", () => {
    * Map, donc plus de clé `playerId` dans une fixture, donc plus de statistiques
    * attribuables à un joueur absent du roster.
    */
-  function renderBand() {
+  function renderBand(previous: PlayerStats | null = null) {
     return render(
       <ActivePlayer
         player={roster[0]!}
-        score={7}
-        stats={{ ...aggregateFor([], "a"), points: 7 }}
+        points={4}
+        quarterStats={{
+          ...emptyPlayerStats("a"),
+          points: 2,
+          reboundsOffensive: 1,
+          reboundsDefensive: 2,
+          assists: 3,
+          steals: 4,
+          blocks: 5,
+          turnovers: 6,
+        }}
+        previousStats={previous}
         fouls={3}
       />,
     );
@@ -179,20 +194,41 @@ describe("ActivePlayer", () => {
     expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
   });
 
-  it("affiche le score total du match", () => {
+  it("affiche les points du joueur sur le match", () => {
     renderBand();
-    // `data-testid="score"` porte le cumul du match, distinct des stats de
-    // période affichées à côté.
-    expect(screen.getByTestId("score")).toHaveTextContent("7");
+    // L'app ne suit qu'un joueur : ce chiffre est son total, pas un score
+    // d'équipe. Il ne doit pas repartir de zéro entre les périodes.
+    expect(screen.getByTestId("points")).toHaveTextContent("4");
   });
 
-  it("affiche les points de la période", () => {
+  it("affiche les pastilles de la période", () => {
     renderBand();
-    // Le « 7 » apparaît aussi dans le compteur de fautes (« 3/5 »), d'où la
-    // recherche sur le contenu exact d'un nœud de texte.
-    expect(
-      screen.getAllByText((_c, node) => node?.textContent === "7").length,
-    ).toBeGreaterThan(0);
+    // Rebonds, passes, interceptions, contres et balles perdues sont tous des
+    // stats de période : ils suivent le sélecteur, contrairement au total.
+    expect(screen.getByText("3R")).toBeInTheDocument();
+    expect(screen.getByText("3P")).toBeInTheDocument();
+    expect(screen.getByText("4INT")).toBeInTheDocument();
+    expect(screen.getByText("5C")).toBeInTheDocument();
+    expect(screen.getByText("6BP")).toBeInTheDocument();
+  });
+
+  it("n'affiche pas de ligne de cumul en première période", () => {
+    // En Q1, période et cumul sont le même match : deux lignes identiques sous un
+    // joueur qui n'a qu'un quart dans les jambes n'apportent rien.
+    renderBand();
+    expect(screen.queryByText("Cumul")).not.toBeInTheDocument();
+  });
+
+  it("affiche une ligne de cumul distincte de la période", () => {
+    renderBand({ ...emptyPlayerStats("a"), points: 2, assists: 8 });
+
+    expect(screen.getByText("Cumul")).toBeInTheDocument();
+    // « 8P » n'existe que sur le cumul ; « 3P » que sur la période. Si les deux
+    // lignes affichaient les mêmes stats, le coach ne verrait qu'un doublon.
+    expect(screen.getByText("8P")).toBeInTheDocument();
+    expect(screen.getByText("3P")).toBeInTheDocument();
+    expect(screen.getAllByText("Cumul")).toHaveLength(1);
+    expect(screen.getAllByText("Q")).toHaveLength(1);
   });
 
   it("affiche les fautes du match entier, pas de la période", () => {
@@ -218,25 +254,32 @@ describe("ActivePlayer", () => {
     expect(counters.some((node) => node.textContent === "3 / 5")).toBe(true);
   });
 
-  it("affiche le score même sans stats de période", () => {
-    // Sans stats, la carte garde le score total : c'est le chiffre que le coach
-    // annonce au banc, il ne dépend pas de la période.
+  it("affiche le total même sans stats de période", () => {
+    // Sans stats, la carte garde le total du joueur : c'est le chiffre que le
+    // coach annonce au banc, il ne dépend pas de la période.
     render(
       <ActivePlayer
         player={roster[0]!}
-        score={17}
-        stats={undefined}
+        points={17}
+        quarterStats={undefined}
+        previousStats={null}
         fouls={0}
       />,
     );
-    expect(screen.getByTestId("score")).toHaveTextContent("17");
+    expect(screen.getByTestId("points")).toHaveTextContent("17");
   });
 
   it("ne rend rien tant que le joueur n'est pas connu", () => {
     // Le cas est transitoire, pas une erreur : la base n'a pas encore répondu.
     // Rendre une puce vide ferait clignoter l'écran à chaque ouverture.
     const { container } = render(
-      <ActivePlayer player={null} score={0} stats={undefined} fouls={0} />,
+      <ActivePlayer
+        player={null}
+        points={0}
+        quarterStats={undefined}
+        previousStats={null}
+        fouls={0}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -251,13 +294,14 @@ describe("ActivePlayer", () => {
   });
 
   it("n'affiche aucun numéro de maillot", () => {
-    // Le joueur suivi n'a pas de numéro. Avec un score à zéro, seul le « 0 »
-    // du score apparaît : aucun « 4 » (le numéro du roster) ne doit être rendu.
+    // Le joueur suivi n'a pas de numéro. Avec un total à zéro, seul le « 0 »
+    // apparaît : aucun « 4 » (le numéro du roster) ne doit être rendu.
     render(
       <ActivePlayer
         player={{ ...roster[0]!, number: null }}
-        score={0}
-        stats={undefined}
+        points={0}
+        quarterStats={undefined}
+        previousStats={null}
         fouls={0}
       />,
     );
@@ -269,13 +313,15 @@ describe("ActivePlayer", () => {
 
 describe("useMatchData", () => {
   function Probe({ matchId: id }: { matchId: string | null }) {
-    const { match, player, stats, fouls, loading } = useMatchData(id);
+    const { match, player, quarterStats, previousStats, fouls, loading } =
+      useMatchData(id);
     if (loading) return <span>chargement</span>;
     return (
       <div>
         <span data-testid="opponent">{match?.opponentName ?? "—"}</span>
         <span data-testid="player">{player?.firstName ?? "—"}</span>
-        <span data-testid="points">{stats?.points ?? 0}</span>
+        <span data-testid="points">{quarterStats?.points ?? 0}</span>
+        <span data-testid="previous">{previousStats?.points ?? -1}</span>
         <span data-testid="fouls">{fouls}</span>
       </div>
     );
@@ -333,6 +379,64 @@ describe("useMatchData", () => {
     await waitFor(() => {
       expect(screen.getByTestId("points")).toHaveTextContent("3");
     });
+  });
+
+  it("n'a pas de cumul en première période", async () => {
+    await repos.actions.append(matchId, [
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 1,
+        value: 2,
+        made: true,
+      },
+    ]);
+    useMatchStore.setState({ quarter: 1 });
+
+    render(<Probe matchId={matchId} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("points")).toHaveTextContent("2");
+    });
+    // `-1` distingue « pas de cumul » de « cumul à zéro ». Une période antérieure
+    // sans action ne doit pas non plus produire une ligne vide.
+    expect(screen.getByTestId("previous")).toHaveTextContent("-1");
+  });
+
+  it("cumule les périodes déjà jouées", async () => {
+    await repos.actions.append(matchId, [
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 1,
+        value: 2,
+        made: true,
+      },
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 1,
+        value: 3,
+        made: true,
+      },
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 2,
+        value: 2,
+        made: true,
+      },
+    ]);
+    useMatchStore.setState({ quarter: 2 });
+
+    render(<Probe matchId={matchId} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("points")).toHaveTextContent("2");
+    });
+    // Le cumul ne prend que les périodes **antérieures** : en Q2 affichée, il vaut
+    // la Q1 seule (2 + 3), jamais le match entier — celui-ci est le gros chiffre.
+    expect(screen.getByTestId("previous")).toHaveTextContent("5");
   });
 
   it("ignore les actions annulées", async () => {

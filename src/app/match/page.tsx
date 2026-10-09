@@ -81,7 +81,7 @@ function MatchScreen() {
    */
   const [confirming, setConfirming] = useState(false);
 
-  const { match, player, stats, fouls, totalPoints, loading } =
+  const { match, player, quarterStats, previousStats, fouls, points, loading } =
     useMatchData(matchId);
 
   /**
@@ -196,8 +196,9 @@ function MatchScreen() {
         <PeriodSelector />
         <ActivePlayer
           player={player}
-          score={totalPoints}
-          stats={stats}
+          points={points}
+          quarterStats={quarterStats}
+          previousStats={previousStats}
           fouls={fouls}
         />
       </div>

@@ -6,12 +6,14 @@ import {
   aggregateFor,
   fieldGoalsAttempted,
   fieldGoalsMade,
+  filterActions,
   playerLabel,
-  teamTotals,
+  playerStatsFrom,
   totalRebounds,
   type PlayerStats,
 } from "@/domain/stats";
 import type { MatchRow, PlayerRow } from "@/data/schema";
+import { QUARTERS } from "@/domain/types";
 import { FoulDots } from "@/ui/Badges";
 import { useAsyncData } from "@/ui/useAsyncData";
 import { useMatchStore } from "@/features/match/store";
@@ -19,68 +21,98 @@ import { useMatchStore } from "@/features/match/store";
 /**
  * Carte du joueur suivi (PLAN.md §11 et §12).
  *
- * C'était le bandeau de saisie. La maquette en fait une **carte** : prénom,
- * score total du match, stats de la période, pastilles de fautes. C'est aussi
- * l'emplacement du score — le chiffre que le coach annonce au banc, qui n'avait
- * plus de place dans le header refondu.
+ * L'app suit **un seul joueur** : il n'y a pas de score d'équipe. Le gros chiffre
+ * est donc son total sur le match — c'est le nombre que le coach annonce au banc.
  *
- * Deux portées, et pourquoi elles ne se mélangent pas :
+ * Les lignes de stats portent deux portées, et le coach pose les deux questions :
  *
- * **Le score (`score`) est un cumul du match entier.** Il ne doit pas se
- * remettre à zéro en changeant de période, sinon le coach annoncerait un mauvais
- * chiffre au banc. C'est la même règle que pour l'ancien header, déplacée ici.
+ * **La période affichée.** « Combien a-t-il mis ce quart-ci », pendant qu'il se
+ * passe. C'est la ligne du haut.
  *
- * **Les tirs, rebonds et passes (`stats`) sont ceux de la période affichée.**
- * « Combien a-t-il mis ce quart-ci » est la question du coach pendant une
- * période ; le cumul de match est ce qu'il regarde entre les périodes.
+ * **Le cumul des périodes jouées.** Ce qu'il regarde entre les périodes. N'apparaît
+ * qu'à partir de la Q2 : en Q1, la période et le cumul sont la même chose, donc
+ * la ligne serait un doublon littéral — deux rangées identiques sous un joueur qui
+ * n'a qu'un quart dans les jambes.
  *
- * **Les fautes (`fouls`) sont cumulées sur tout le match.** La limite à cinq est
- * *par rencontre* : un joueur éliminable en Q1 le reste en Q2.
+ * Les fautes restent cumulées sur tout le match et séparées : la limite à cinq est
+ * *par rencontre*, un joueur éliminable en Q1 le reste en Q2. Les mélanger aux
+ * stats de période ferait croire à un décompte qui repart.
  */
 
 export interface ActivePlayerProps {
   /** Le joueur suivi. `null` tant que la base n'a pas répondu. */
   player: PlayerRow | null;
-  /** Score du match entier, toutes périodes confondues. */
-  score: number;
-  /** Points et tirs du joueur sur la période affichée. */
-  stats: PlayerStats | undefined;
+  /** Points du joueur sur le match entier, toutes périodes confondues. */
+  points: number;
+  /** Stats de la période affichée. */
+  quarterStats: PlayerStats | undefined;
+  /**
+   * Stats cumulées des périodes **jouées** (celles qui précèdent la période
+   * affichée). `null` en première période : rien à cumuler.
+   */
+  previousStats: PlayerStats | null;
   /** Fautes cumulées sur le match entier. */
   fouls: number;
 }
 
+/**
+ * Une rangée de pastilles.
+ *
+ * Le rendu est identique pour la période et pour le cumul : mêmes stats, même
+ * ordre. La différence tient à l'étiquette seule, pas à deux listes de
+ * conditions — deux listes divergeraient à la première stat ajoutée.
+ */
+function StatRow({ label, stats }: { label: string; stats: PlayerStats }) {
+  const attempts = fieldGoalsAttempted(stats);
+
+  return (
+    <div className="tabular flex flex-wrap items-baseline gap-x-2 text-sm text-primary">
+      {/* Largeur fixe : sans elle, « Cumul » (plus long que « Q ») décalerait
+          toutes les pastilles de la ligne par rapport à celles du dessus. */}
+      <span className="w-12 shrink-0 text-xs text-primary/50">{label}</span>
+      {attempts > 0 && (
+        <span title="tirs réussis / tentés">
+          {fieldGoalsMade(stats)}/{attempts}
+        </span>
+      )}
+      {totalRebounds(stats) > 0 && (
+        <span title="rebonds">{totalRebounds(stats)}R</span>
+      )}
+      {stats.assists > 0 && <span title="passes">{stats.assists}P</span>}
+      {stats.steals > 0 && <span title="interceptions">{stats.steals}INT</span>}
+      {stats.blocks > 0 && <span title="contres">{stats.blocks}C</span>}
+      {stats.turnovers > 0 && (
+        <span title="balles perdues">{stats.turnovers}BP</span>
+      )}
+    </div>
+  );
+}
+
 export function ActivePlayer({
   player,
-  score,
-  stats,
+  points,
+  quarterStats,
+  previousStats,
   fouls,
 }: ActivePlayerProps) {
   if (player === null) return null;
-
-  const attempts = stats === undefined ? 0 : fieldGoalsAttempted(stats);
 
   return (
     <div className="mx-auto mb-8 w-full max-w-[280px] rounded-[10px] border border-primary/20 bg-raised px-5 py-3">
       <span className="text-sm text-primary">{playerLabel(player)}</span>
 
-      <div className="tabular mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-primary">
-        <span className="text-base font-semibold">
-          {/* `data-testid` : le score est la valeur que les tests et le coach
-            ciblent ; le texte visible suffit comme libellé accessible. */}
-          <span data-testid="score">{score}</span>pts
+      <div className="tabular mt-1 flex items-baseline gap-x-2 text-sm text-primary">
+        {/* `data-testid` : c'est la valeur que les tests et le coach ciblent ; le
+          texte visible suffit comme libellé accessible. */}
+        <span className="text-xl font-semibold">
+          <span data-testid="points">{points}</span>pts
         </span>
-        {attempts > 0 && stats !== undefined && (
-          <span title="tirs réussis / tentés de la période">
-            {fieldGoalsMade(stats)}/{attempts}
-          </span>
-        )}
-        {stats !== undefined && totalRebounds(stats) > 0 && (
-          <span>{totalRebounds(stats)}R</span>
-        )}
-        {stats !== undefined && stats.assists > 0 && (
-          <span>{stats.assists}P</span>
-        )}
       </div>
+
+      {quarterStats !== undefined && <StatRow label="Q" stats={quarterStats} />}
+      {previousStats !== null && (
+        <StatRow label="Cumul" stats={previousStats} />
+      )}
 
       <div className="mt-1.5">
         <FoulDots fouls={fouls} showCount />
@@ -104,12 +136,17 @@ export interface MatchData {
   match: MatchRow | null;
   /** Le joueur suivi, ou `null` si le match n'a pas de roster. */
   player: PlayerRow | null;
-  /** Points et tirs de la période affichée. */
-  stats: PlayerStats | undefined;
+  /** Stats de la période affichée. */
+  quarterStats: PlayerStats | undefined;
+  /**
+   * Stats cumulées des périodes jouées, `null` en Q1. Le joueur inconnu ne se
+   * distingue pas ici : le composant rend `null` avant de lire cette valeur.
+   */
+  previousStats: PlayerStats | null;
   /** Fautes cumulées sur le match entier. */
   fouls: number;
-  /** Score du match entier, toutes périodes confondues. */
-  totalPoints: number;
+  /** Points du joueur sur le match entier. */
+  points: number;
 }
 
 export function useMatchData(matchId: string | null): MatchData & {
@@ -129,20 +166,34 @@ export function useMatchData(matchId: string | null): MatchData & {
     ]);
 
     const player = roster[0] ?? null;
+    if (player === null) return { ...EMPTY, match: found ?? null };
 
-    // Les points de la période sont filtrés ; les fautes ne le sont pas — la
-    // règle des cinq fautes est par rencontre.
-    const inQuarter = actions.filter((action) => action.quarter === quarter);
+    // Un seul calcul sur les actions du match entier sert aux fautes et au total
+    // de points : les deux sont cumulés, donc filtrer par période ici afficherait
+    // « 0 » après un changement de période.
+    const totals = aggregateFor(actions, player.id);
+
+    // Les périodes déjà jouées : celles strictement antérieures à la période
+    // affichée. La Q1 n'en a aucune, d'où `null` — et pas un cumul vide, que la
+    // carte afficherait comme une seconde ligne de zéros.
+    const played = QUARTERS.filter((q) => q < quarter);
+    const previousStats =
+      played.length === 0
+        ? null
+        : playerStatsFrom(
+            filterActions(actions, { playerId: player.id }).filter((action) =>
+              played.includes(action.quarter),
+            ),
+            player.id,
+          );
 
     return {
       match: found ?? null,
       player,
-      stats: player === null ? undefined : aggregateFor(inQuarter, player.id),
-      fouls: player === null ? 0 : aggregateFor(actions, player.id).fouls,
-      // Cumul du match, calculé sur les actions et non sur les points affichés :
-      // une action dont le joueur aurait quitté le roster ne doit pas disparaître
-      // du score.
-      totalPoints: teamTotals(actions).points,
+      quarterStats: aggregateFor(actions, player.id, { quarter }),
+      previousStats,
+      fouls: totals.fouls,
+      points: totals.points,
     };
   }, [matchId, quarter]);
 
@@ -154,7 +205,8 @@ export function useMatchData(matchId: string | null): MatchData & {
 const EMPTY: MatchData = {
   match: null,
   player: null,
-  stats: undefined,
+  quarterStats: undefined,
+  previousStats: null,
   fouls: 0,
-  totalPoints: 0,
+  points: 0,
 };
