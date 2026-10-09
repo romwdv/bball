@@ -1,0 +1,132 @@
+# =============================================================================
+# SpaceBunny — build et publication de l'image
+# =============================================================================
+# Le build se fait **ici**, pas sur le VPS. Coolify, avec son build Railpack,
+# essayait de compiler sur une machine de 4 Go sans swap exploitable : Turbopack
+# y a un pic mémoire supérieur, le noyau tuait le processus (`exit code 137`).
+# Cette machine a 16 Go, et le VPS ne reçoit plus qu'une image de ~2 Mo à tirer.
+#
+# Enchaînement, et ce qu'il garantit :
+#
+#   typecheck + lint + test  → rien ne part si le code est cassé
+#   build Docker             → l'image est publiée
+#   webhook Coolify          → le VPS la tire
+#
+# Le build Next n'est **pas** rejoué entre typecheck et image : il a lieu une
+# seule fois, dans le Dockerfile. Le lancer aussi ici doublerait le temps du
+# pipeline pour rien.
+#
+# Le budget de bundle (`check-bundle.mjs`) fait partie de `pnpm build`, donc il
+# est appliqué au moment de construire l'image : un bundle trop gros échoue ici,
+# avant qu'une image existe.
+# =============================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Permet de republier sans commit, quand seul le contenu de l'image a changé.
+  workflow_dispatch:
+
+# Un push sur `main` annule le déploiement du commit précédent : sans cela, deux
+# builds se disputeraient la même image `main` et le déploiement pourrait tirer
+# le mauvais contenu.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: main
+
+jobs:
+  build-and-push:
+    name: Vérifier, construire, publier
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # Nécessaire pour pousser l'image sur GHCR avec le `GITHUB_TOKEN` :
+      # c'est ce token qui donne l'écriture, il n'a pas à être stocké.
+      packages: write
+
+    steps:
+      # -- 1. Code à jour -------------------------------------------------------
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # Sans version ici, l'action lit `packageManager` du `package.json` —
+        # une seule source de vérité pour la version de pnpm.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Cache le magasin pnpm, pas `node_modules`. `node_modules` est lié
+          # au système et à l'architecture : le réutiliser depuis un runner
+          # différent produit un install cassé. Le magasin, lui, est portable.
+          cache: pnpm
+
+      # -- 2. Vérifications -----------------------------------------------------
+      # Chacune est une étape séparée : quand elle échoue, l'écran du run nomme
+      # la vérification fautive, au lieu d'un « Command failed » anonym.
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test
+
+      # -- 3. Image -------------------------------------------------------------
+      - name: Construire et publier l'image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          # L'image contient du code compilé pour une seule plateforme : un
+          # cache partagé entre `linux/amd64` et `linux/arm64` produirait des
+          # couches incorrectes. Le cache est donc cloisonné par plateforme.
+          cache-from: type=gha,scope=${{ env.IMAGE_TAG }}-amd64
+          cache-to: type=gha,scope=${{ env.IMAGE_TAG }}-amd64,mode=max
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+
+      # -- 4. Déploiement -------------------------------------------------------
+      # Le build de l'image est terminé, mais GHCR peut mettre quelques secondes
+      # à répliquer le tag. Sans ce délai et cette nouvelle tentative, Coolify
+      # peut tirer un tag encore absent et échouer sur un déploiement qui, lui,
+      # aurait parfaitement bien fonctionné.
+      #
+      # L'absence du webhook est traitée **dans le script**, pas dans un `if` :
+      # le contexte `secrets` n'est pas disponible dans les conditions GitHub
+      # Actions, donc `if: secrets.X != ''` est toujours faux et l'étape serait
+      # sautée en silence. Ici le build reste vert et l'écran affiche
+      # « déploiement à déclencher manuellement ».
+      - name: Déclencher le déploiement Coolify
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_URL }}
+        run: |
+          if [ -z "$COOLIFY_DEPLOY_WEBHOOK_URL" ]; then
+            echo "::warning::COOLIFY_DEPLOY_WEBHOOK_URL absent : image publiée,"
+            echo "::warning::mais le déploiement est à déclencher depuis le panneau."
+            exit 0
+          fi
+          for attempt in 1 2 3 4 5; do
+            sleep 10
+            if curl -fsS "$COOLIFY_DEPLOY_WEBHOOK_URL"; then
+              echo "Déploiement déclenché (tentative $attempt)."
+              exit 0
+            fi
+            echo "Tentative $attempt échouée, nouvel essai dans 10 s."
+          done
+          echo "::error::Le build a réussi mais Coolify n'a pas été déclenché."
+          echo "::error::Déclenchez le déploiement manuellement depuis le panneau."
+          exit 1

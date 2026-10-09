@@ -1,0 +1,34 @@
+# Contexte de build Docker.
+#
+# Le contexte est transféré au démon à chaque build : tout ce qui s'y trouve
+# coûte du temps, même inutile. Le dépôt fait ~1,2 Mo sans ce fichier, et il
+# contient des répertoires de plusieurs centaines de Mo une fois un build local
+# passé (`node_modules`, `.next`). D'où cette liste.
+
+# dépendances — réinstallées par `pnpm install`
+node_modules
+.pnpm-store
+
+# artefacts de build et de test — régénérés dans l'image
+.next
+out
+coverage
+.vitest
+test-results
+playwright-report
+*.tsbuildinfo
+
+# secrets locaux : les valeurs viennent des `--build-arg`, jamais des fichiers
+.env*
+!.env.example
+
+# certificats mkcert, pour les tests iPhone en local
+.certs
+*.pem
+
+# le workflow CI ne fait pas partie de l'image
+.github
+
+# métadonnées Git : l'image est construite depuis le checkout, pas depuis l'historique
+.git
+.gitignore
