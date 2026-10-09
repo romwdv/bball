@@ -140,8 +140,15 @@ jobs:
       #   - l'URL, qui identifie la ressource à déployer (paramètre `uuid`) ;
       #   - un en-tête `Authorization: Bearer <token>`, qui autorise l'action.
       #
-      # L'URL seule renvoie `401` : c'est le jeton qui autorise, pas l'adresse.
       # Ce sont deux secrets distincts dans Coolify — voir « Keys & Tokens ».
+      #
+      # `curl -f` **masque le corps de la réponse** : il ne sort que le code.
+      # Or `405 Method Not Allowed`, `401`, `404` et « uuid inconnu » ne se
+      # distinguent que par leur corps — savoir « méthode refusée » et savoir
+      # « ressource inconnue » sont deux diagnostics opposés. `-w` intercepte
+      # donc le code, `-s` le laisse passer dans `body`, et c'est `body` qui
+      # est affiché en cas d'échec. Masquer la réponse d'erreur est ce qui fait
+      # perdre une heure sur ce genre d'appel.
       #
       # L'absence des secrets est traitée **dans le script**, pas dans un `if` :
       # le contexte `secrets` n'est pas disponible dans les conditions GitHub
@@ -158,18 +165,44 @@ jobs:
             echo "::warning::mais le déploiement est à déclencher depuis le panneau."
             exit 0
           fi
+
+          # L'URL est affichée, jamais le token. Elle n'est pas un secret : elle
+          # ne contient que l'adresse de l'instance et l'uuid de la ressource.
+          # Masquer l'URL empêcherait de voir si elle pointe vers la bonne
+          # ressource — et c'est précisément ce qu'il faut vérifier ici.
+          echo "Webhook : $COOLIFY_DEPLOY_WEBHOOK_URL"
+
           # GHCR peut mettre quelques secondes à répliquer le tag, et Coolify
           # tire l'image immédiatement. La première tentative peut donc tomber
           # sur un tag encore absent : d'où les reprises, mais **après** un
           # premier essai immédiat — attendre avant même d'essayer retardait
           # chaque déploiement pour rien.
           for attempt in 1 2 3; do
-            if curl -fsS --request GET "$COOLIFY_DEPLOY_WEBHOOK_URL" \
-              --header "Authorization: Bearer $COOLIFY_DEPLOY_TOKEN"; then
-              echo "Déploiement déclenché (tentative $attempt)."
-              exit 0
+            status=$(curl -s -o body.txt -w '%{http_code}' \
+              --request GET "$COOLIFY_DEPLOY_WEBHOOK_URL" \
+              --header "Authorization: Bearer $COOLIFY_DEPLOY_TOKEN")
+
+            # 405 = le endpoint refuse GET. Coolify accepte aussi POST ; on
+            # tente les deux plutôt que de conclure à une mauvaise URL.
+            if [ "$status" = "405" ]; then
+              status=$(curl -s -o body.txt -w '%{http_code}' \
+                --request POST "$COOLIFY_DEPLOY_WEBHOOK_URL" \
+                --header "Authorization: Bearer $COOLIFY_DEPLOY_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data '{}')
             fi
-            echo "Tentative $attempt échouée, nouvel essai dans 15 s."
+
+            case "$status" in
+              2*)
+                echo "Déploiement déclenché (tentative $attempt, HTTP $status)."
+                cat body.txt
+                exit 0
+                ;;
+              *)
+                echo "Tentative $attempt : HTTP $status"
+                cat body.txt
+                ;;
+            esac
             sleep 15
           done
           echo "::error::Le build a réussi mais Coolify n'a pas été déclenché."
