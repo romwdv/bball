@@ -96,6 +96,20 @@ jobs:
         run: pnpm test
 
       # -- 3. Image -------------------------------------------------------------
+      # Connexion explicite à GHCR.
+      #
+      # `build-push-action` utilise `GITHUB_TOKEN` tout seul, et c'est
+      # normalement suffisant. Mais GHCR renvoie alors `failed to fetch anonymous
+      # token … 403 Forbidden` si le compte n'autorise pas les workflows à créer
+      # des paquets — un réglage du compte, pas du dépôt, invisible depuis le
+      # dépôt lui-même. Le login explicite donne un message d'erreur lisible, et
+      # ne coûte rien.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       # Le builder par défaut de GitHub est le pilote `docker`, qui **ne sait pas
       # exporter de cache** (`Cache export is not supported for the docker
       # driver`). Or le cache est justement ce qui rend le build rapide : sans
