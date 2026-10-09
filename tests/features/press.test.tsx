@@ -452,6 +452,41 @@ describe("CombosBar", () => {
     );
   }
 
+  // Chaque combo produit une action ou un groupe, et `CombosBar` rattache la
+  // fiche de lancers au `groupId` de l'action fautive. Si l'un lacked de
+  // groupe, la fiche ne pourrait pas s'y rattacher — et `ActionSchema`
+  // (`groupId: min(1)`) rejeterait le premier lancer, en plein match. Le
+  // `?? ""` qui existait côté composant ne protégeait rien : il transformait
+  // l'absence en chaîne vide, invalide elle aussi, et repoussait l'échec plus
+  // loin.
+  it("rattache chaque combo fautif à un groupe non vide", async () => {
+    const user = userEvent.setup();
+    renderCombos();
+
+    // Le bouton expose `name` (le libellé lisible du coach), pas `label`
+    // (l'abréviation affichée dans la barre) : `getByRole` teste le nom
+    // accessible.
+    const combosFautifs = [
+      /Panier 2 points \+ faute/,
+      /Panier 3 points \+ faute/,
+      /Tir raté, 2 lancers/,
+      /Tir raté, 3 lancers/,
+    ];
+
+    for (const nom of combosFautifs) {
+      await user.click(screen.getByRole("button", { name: nom }));
+      // La fiche s'ouvre seulement si le groupe est exploitable ; on attend le
+      // store plutôt que le clic, l'écriture dans IndexedDB étant asynchrone.
+      await waitFor(() => {
+        expect(useMatchStore.getState().sheetGroupId).not.toBeNull();
+      });
+      expect(useMatchStore.getState().sheetGroupId).not.toBe("");
+      // `renderCombos` ne monte que la barre, pas la fiche : on referme par le
+      // store, ce qui est le seul accès au `closeSheet` ici.
+      useMatchStore.getState().closeSheet();
+    }
+  });
+
   it("écrit un and-1 à 2 points en UNE seule action", async () => {
     const user = userEvent.setup();
     renderCombos();
@@ -516,13 +551,17 @@ describe("CombosBar", () => {
     // n'appelle `openFreeThrowSheet` qu'**après** `await onRecord(...)`,
     // c'est-à-dire après l'écriture dans IndexedDB. Lire `sheetGroupId` juste
     // après `user.click` est une course — gagne sur une machine rapide, perd
-    // sur un runner CI chargé. Le `?? ""` ci-dessous transforme alors ce raté
-    // en échec de validation Zod, très loin de sa cause : c'est ce qui rendait
-    // le message incompréhensible.
+    // sur un runner CI chargé.
     await waitFor(() => {
       expect(useMatchStore.getState().sheet).toBe("free-throws");
     });
     const sheetGroupId = useMatchStore.getState().sheetGroupId;
+
+    // Le groupe est asserté, pas contourné par un `?? ""`. Un `groupId` vide est
+    // rejeté par `ActionSchema` (`min(1)`) : l'écarter aurait transformé une
+    // régression en échec de validation, très loin de la fiche qui l'a combinée.
+    expect(sheetGroupId).toBeDefined();
+    expect(sheetGroupId).not.toBe("");
 
     // Sans ce lien, annuler ne retirait que le lancer, laissant un panier
     // marqué sans la faute qui l qui va avec.
@@ -615,6 +654,9 @@ describe("CombosBar", () => {
       expect(useMatchStore.getState().sheet).toBe("free-throws");
     });
     const sheetGroupId = useMatchStore.getState().sheetGroupId;
+
+    expect(sheetGroupId).toBeDefined();
+    expect(sheetGroupId).not.toBe("");
 
     const written = await useMatchStore.getState().record(
       [

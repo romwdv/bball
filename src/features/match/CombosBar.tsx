@@ -177,7 +177,21 @@ function ComboButton({
     if (fouled === undefined) return;
 
     const due = awardedFreeThrows(fouled) ?? 0;
-    if (due > 0) openFreeThrowSheet(fouled.groupId ?? "", due);
+
+    // `groupId` ne peut pas être absent ici : `store.record()` en génère un et
+    // `append()` l'applique à chaque ligne écrite. L'invariant est **vérifié**
+    // plutôt que supposé — l'assertion ci-dessous est la vraie protection, un
+    // `?? ""` ne l'était pas. Une chaîne vide est *invalide* au regard
+    // d'`ActionSchema` (`min(1)`) : la verser dans la fiche ne faisait que
+    // repousser l'échec jusqu'à la validation du premier lancer, deux cents
+    // lignes plus bas et au milieu d'un match.
+    if (due <= 0) return;
+    if (fouled.groupId === undefined) {
+      throw new Error(
+        "CombosBar : action fautive sans groupId, la fiche ne peut pas s'y rattacher",
+      );
+    }
+    openFreeThrowSheet(fouled.groupId, due);
   }
 
   return (
