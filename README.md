@@ -1,7 +1,7 @@
 # Stats Basket — Stats de match de basketball
 
 PWA mobile-first de saisie de statistiques de basketball en bord de terrain.
-Hors-ligne garanti, build 100 % statique...
+Hors-ligne garanti, build 100 % statique.
 
 Le cahier des charges, l'état d'avancement et les décisions prises sont dans
 [`PLAN.md`](./PLAN.md). C'est le document de référence : le lire avant de
