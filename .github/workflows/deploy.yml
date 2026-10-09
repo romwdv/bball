@@ -96,6 +96,13 @@ jobs:
         run: pnpm test
 
       # -- 3. Image -------------------------------------------------------------
+      # Le builder par défaut de GitHub est le pilote `docker`, qui **ne sait pas
+      # exporter de cache** (`Cache export is not supported for the docker
+      # driver`). Or le cache est justement ce qui rend le build rapide : sans
+      # lui, chaque run retélécharge et recompile tout. Cette étape crée un
+      # builder `docker-container`, qui le supporte.
+      - uses: docker/setup-buildx-action@v3
+
       - name: Construire et publier l'image
         uses: docker/build-push-action@v6
         with:
