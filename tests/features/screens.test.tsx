@@ -456,9 +456,19 @@ describe("FreeThrowSheet", () => {
 
     await user.click(screen.getByRole("button", { name: "Lancer 2 réussi" }));
 
-    expect(
-      screen.getByRole("button", { name: "Lancer 2 réussi" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    // `waitFor` est nécessaire, et non prudent : `FreeThrowSheet.save()`
+    // n'appelle `setResults` qu'**après** `await record(...)`, c'est-à-dire
+    // après l'écriture dans IndexedDB. Or `aria-pressed` se dérive de
+    // `results`. `user.click` ne résout qu'une fois les microtasks vidés — ce
+    // qui n'inclut pas une écriture `fake-indexeddb`, qui est un vrai travail
+    // asynchrone. Une assertion immédiate est donc une course : elle gagne sur
+    // une machine rapide, perd sur un runner CI chargé. D'où ce `waitFor`, et
+    // la raison pour laquelle ce test échouait uniquement en CI.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Lancer 2 réussi" }),
+      ).toHaveAttribute("aria-pressed", "true");
+    });
   });
 
   it("décompte les lancers restants", async () => {
