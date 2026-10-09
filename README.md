@@ -1,7 +1,7 @@
 # Stats Basket — Stats de match de basketball
 
 PWA mobile-first de saisie de statistiques de basketball en bord de terrain.
-Hors-ligne garanti, build 100 % statique.
+Hors-ligne garanti, build 100 % statique...
 
 Le cahier des charges, l'état d'avancement et les décisions prises sont dans
 [`PLAN.md`](./PLAN.md). C'est le document de référence : le lire avant de
@@ -307,11 +307,11 @@ Ce sont des **secrets d'environnement**, dans l'environnement GitHub nommé
 vides, sans la moindre erreur, et l'application afficherait un écran
 « synchronisation non configurée » en production.
 
-| Secret | Rôle |
-| ------ | ---- |
-| `NEXT_PUBLIC_SUPABASE_URL` | projet Supabase, lue au build |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | clé publishable, lue au build |
-| `COOLIFY_DEPLOY_WEBHOOK_URL` | déclenche le déploiement Coolify |
+| Secret                                 | Rôle                             |
+| -------------------------------------- | -------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | projet Supabase, lue au build    |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | clé publishable, lue au build    |
+| `COOLIFY_DEPLOY_WEBHOOK_URL`           | déclenche le déploiement Coolify |
 
 Sans le troisième, le build reste vert et l'image est publiée, mais rien n'est
 déployé : le run finit en erreur après cinq tentatives. C'est volontaire — un
@@ -319,7 +319,7 @@ déploiement oublié doit être visible.
 
 ### Coolify
 
-La ressource est de type **Docker Image**, pas *Application* avec source Git.
+La ressource est de type **Docker Image**, pas _Application_ avec source Git.
 Elle ne se déclenche **jamais** sur push : elle ne réagit qu'à son webhook ou à
 un clic manuel. C'est le workflow GitHub qui l'appelle, une fois l'image
 publiée.
@@ -327,8 +327,8 @@ publiée.
 - **Image** : `ghcr.io/romwdv/bball:main`
 - **Ports Exposes** : `80` (Nginx dans le conteneur)
 
-⚠️ Une ressource *Docker Image* n'a pas de source Git. Si l'ancienne ressource
-*Application* est conservée, elle se déclenche encore à chaque push et échoue
+⚠️ Une ressource _Docker Image_ n'a pas de source Git. Si l'ancienne ressource
+_Application_ est conservée, elle se déclenche encore à chaque push et échoue
 en OOM : la couper.
 
 ### Rollback
