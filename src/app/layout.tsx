@@ -2,6 +2,12 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/features/auth/AuthGate";
 import { ServiceWorkerRegistrar } from "@/features/pwa/ServiceWorkerRegistration";
+import "@fontsource/alexandria/latin-400.css";
+import "@fontsource/encode-sans-expanded/latin-300.css";
+import "@fontsource/encode-sans-expanded/latin-400.css";
+import "@fontsource/encode-sans-expanded/latin-600.css";
+import "@fontsource/abel/latin-400.css";
+import "@fontsource/source-sans-3/latin-400.css";
 import "./globals.css";
 
 const APP_NAME = "Stats Basket";
@@ -41,7 +47,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0f14",
+  themeColor: "#e8e8e8",
   // `viewport-fit=cover` est nécessaire pour que `env(safe-area-inset-*)` vaille
   // autre chose que 0px sur iPhone. Sans lui, la barre d'actions recouvre le bas.
   width: "device-width",

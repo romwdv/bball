@@ -25,7 +25,7 @@ async function createMatch(
 ): Promise<void> {
   await signIn(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Nouveau match" }).click();
+  await page.getByRole("button", { name: "Ajouter un match" }).click();
   await page.getByLabel("Adversaire").fill("BC Nuit");
   await page.getByRole("button", { name: "Commencer la saisie" }).click();
   await expect(page.getByTestId("score")).toBeVisible();
@@ -105,7 +105,7 @@ test.describe("parcours complet", () => {
     // score final est là.
     await expect(page.getByText("Feuille de match")).toBeHidden();
     await expect(page.getByText("vs BC Nuit")).toBeVisible();
-    await expect(page.getByText("Exporter CSV")).toBeVisible();
+    await expect(page.getByText("Exporter en CSV")).toBeVisible();
     // La grille d'actions n'est plus proposée.
     await expect(
       page.getByRole("button", { name: /2 points — tap réussi/ }),
@@ -117,8 +117,11 @@ test.describe("parcours complet", () => {
     await page.getByRole("button", { name: /2 points — tap réussi/ }).click();
     await page.getByRole("button", { name: "Sortir" }).click();
 
-    // Retour à l'accueil : le match doit être repris, pas perdu.
-    const resume = page.getByText(/Reprendre/).first();
+    // Retour à l'accueil : la carte pilule du match doit être reprise, pas
+    // perdue (PLAN.md §12).
+    const resume = page.getByRole("link", {
+      name: /Match en cours contre BC Nuit/,
+    });
     await expect(resume).toBeVisible();
     await resume.click();
 
@@ -145,13 +148,11 @@ test.describe("parcours complet", () => {
   test("crée le joueur suivi sans passer par un roster", async ({ page }) => {
     await signIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
 
-    // Le joueur n'est jamais demandé (PLAN.md §11) : il est créé au premier
-    // lancement et rappelé en lecture seule. L'écran ne doit proposer aucun
+    // Le joueur n'est jamais demandé (PLAN.md §11) et l'écran n'affiche plus de
     // contrôle de roster — c'est la régression que ce test verrouille, pas un
     // détail d'affichage.
-    await expect(page.getByText("Andreas")).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Ajouter au roster/ }),
@@ -188,7 +189,7 @@ test.describe("garde-fou d'accès", () => {
     // Ni la grille de saisie, ni la création de match : l'app est verrouillée,
     // pas simplement redirigée.
     await expect(
-      page.getByRole("button", { name: "Nouveau match" }),
+      page.getByRole("button", { name: "Ajouter un match" }),
     ).toHaveCount(0);
     await expect(page.getByTestId("score")).toHaveCount(0);
   });

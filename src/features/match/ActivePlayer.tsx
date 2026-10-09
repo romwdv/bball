@@ -4,66 +4,87 @@ import { useCallback } from "react";
 import { repos } from "@/data";
 import {
   aggregateFor,
+  fieldGoalsAttempted,
+  fieldGoalsMade,
   playerLabel,
   teamTotals,
+  totalRebounds,
   type PlayerStats,
 } from "@/domain/stats";
 import type { MatchRow, PlayerRow } from "@/data/schema";
-import { FoulDots, PlayerBadges } from "@/ui/Badges";
+import { FoulDots } from "@/ui/Badges";
 import { useAsyncData } from "@/ui/useAsyncData";
 import { useMatchStore } from "@/features/match/store";
 
 /**
- * Bandeau du joueur suivi (PLAN.md §11).
+ * Carte du joueur suivi (PLAN.md §11 et §12).
  *
- * C'était un carrousel d'onglets, un par joueur, avec sélection et verrouillage.
- * L'application ne suit plus qu'**un seul joueur** : le bandeau devient une puce
- * qui n'a plus rien à décider. Deux défauts si on l'avait laissé tel quel — un
- * `role="tablist"` d'un seul onglet annonce au lecteur d'écran une liste de choix
- * qui n'en est pas une, et un bouton « verrouillé » sur lequel on peut appuyer
- * n'explique pas que rien ne se passe.
+ * C'était le bandeau de saisie. La maquette en fait une **carte** : prénom,
+ * score total du match, stats de la période, pastilles de fautes. C'est aussi
+ * l'emplacement du score — le chiffre que le coach annonce au banc, qui n'avait
+ * plus de place dans le header refondu.
  *
- * Le contenu, lui, est **inchangé** — c'est le cœur de la valeur du bandeau :
+ * Deux portées, et pourquoi elles ne se mélangent pas :
  *
- * **Les fautes sont cumulées sur tout le match.** La limite est à 5 fautes *par
- * joueur et par rencontre* : un joueur éliminable en Q1 le reste en Q2. Si le
- * compteur repartait à zéro chaque période, un joueur sorti en première période
- * pourrait prendre cinq fautes de plus — et l'écran de fin de match en
- * compterait dix là où la règle en compte cinq. C'est ce que corrige `fouls`.
+ * **Le score (`score`) est un cumul du match entier.** Il ne doit pas se
+ * remettre à zéro en changeant de période, sinon le coach annoncerait un mauvais
+ * chiffre au banc. C'est la même règle que pour l'ancien header, déplacée ici.
  *
- * **Les points sont ceux de la période affichée.** « Combien a-t-il mis ce
- * quart-ci » est la question du coach pendant une période ; le cumul de match est
- * ce qu'il regarde entre les périodes, et il est dans le header. Afficher le cumul
- * ici ferait passer un tireur de 6 points à 12 au deuxième quart.
+ * **Les tirs, rebonds et passes (`stats`) sont ceux de la période affichée.**
+ * « Combien a-t-il mis ce quart-ci » est la question du coach pendant une
+ * période ; le cumul de match est ce qu'il regarde entre les périodes.
  *
- * Le score du header, lui, est un **cumul de match** : c'est le chiffre que le
- * coach annonce au banc, et il ne doit jamais disparaître en changeant de période.
+ * **Les fautes (`fouls`) sont cumulées sur tout le match.** La limite à cinq est
+ * *par rencontre* : un joueur éliminable en Q1 le reste en Q2.
  */
 
 export interface ActivePlayerProps {
   /** Le joueur suivi. `null` tant que la base n'a pas répondu. */
   player: PlayerRow | null;
+  /** Score du match entier, toutes périodes confondues. */
+  score: number;
   /** Points et tirs du joueur sur la période affichée. */
   stats: PlayerStats | undefined;
   /** Fautes cumulées sur le match entier. */
   fouls: number;
 }
 
-export function ActivePlayer({ player, stats, fouls }: ActivePlayerProps) {
+export function ActivePlayer({
+  player,
+  score,
+  stats,
+  fouls,
+}: ActivePlayerProps) {
   if (player === null) return null;
 
+  const attempts = stats === undefined ? 0 : fieldGoalsAttempted(stats);
+
   return (
-    <div className="flex items-center gap-3 px-4 py-2">
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-        <span className="truncate text-sm font-medium">
-          {playerLabel(player)}
+    <div className="mx-auto w-full max-w-[280px] rounded-[10px] border border-primary/20 bg-raised px-5 py-3">
+      <span className="text-sm text-primary">{playerLabel(player)}</span>
+
+      <div className="tabular mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-primary">
+        <span className="text-base font-semibold">
+          {/* `data-testid` : le score est la valeur que les tests et le coach
+            ciblent ; le texte visible suffit comme libellé accessible. */}
+          <span data-testid="score">{score}</span>pts
         </span>
-        <PlayerBadges stats={stats} />
+        {attempts > 0 && stats !== undefined && (
+          <span title="tirs réussis / tentés de la période">
+            {fieldGoalsMade(stats)}/{attempts}
+          </span>
+        )}
+        {stats !== undefined && totalRebounds(stats) > 0 && (
+          <span>{totalRebounds(stats)}R</span>
+        )}
+        {stats !== undefined && stats.assists > 0 && (
+          <span>{stats.assists}P</span>
+        )}
       </div>
-      {/* Fautes du match entier, pas de la période : voir la justification en
-          tête de fichier. C'est aussi ce qui alimente le blocage à cinq fautes
-          dans `ActionGrid`. */}
-      <FoulDots fouls={fouls} showCount />
+
+      <div className="mt-1.5">
+        <FoulDots fouls={fouls} showCount />
+      </div>
     </div>
   );
 }
@@ -72,13 +93,12 @@ export function ActivePlayer({ player, stats, fouls }: ActivePlayerProps) {
  * Charge le match, son joueur et ses statistiques pour la période courante.
  *
  * Le rechargement est déclenché par `revision` : chaque écriture du store
- * l'incrémente, donc le bandeau se remet à jour sans que le composant ait à
- * connaître la nature de l'écriture. C'est volontairement indirect — l'écran
- * n'a pas à savoir si l'action vient d'un tir, d'un undo ou d'une série de LF.
+ * l'incrémente, donc la carte se remet à jour sans que le composant ait à
+ * connaître la nature de l'écriture.
  *
- * `quarter` est une **dépendance** de `read` et non un champ d'état : le sélecteur
- * de période ne passe pas par `revision` — il ne vient pas d'une écriture — donc
- * sans cette clé les points resteraient figés sur la période précédente.
+ * `quarter` est une **dépendance** de `read` et non un champ d'état : le
+ * sélecteur de période ne passe pas par `revision`, donc sans cette clé les
+ * points resteraient figés sur la période précédente.
  */
 export interface MatchData {
   match: MatchRow | null;
@@ -108,22 +128,16 @@ export function useMatchData(matchId: string | null): MatchData & {
       store.actions.listByMatch(matchId, { includeVoided: false }),
     ]);
 
-    // Un seul joueur est suivi, donc on prend le premier du roster. Le roster
-    // vient du match et non des actions : un joueur qui n'a pas encore tiré doit
-    // quand même apparaître, sinon le bandeau clignoterait en attendant son
-    // premier panier.
     const player = roster[0] ?? null;
 
-    // Les points sont filtrés par période ; les fautes ne le sont pas. La
-    // distinction vient de la règle métier, pas d'une commodité — voir la
-    // justification en tête de fichier.
+    // Les points de la période sont filtrés ; les fautes ne le sont pas — la
+    // règle des cinq fautes est par rencontre.
     const inQuarter = actions.filter((action) => action.quarter === quarter);
 
     return {
       match: found ?? null,
       player,
       stats: player === null ? undefined : aggregateFor(inQuarter, player.id),
-      // Agrégation sur `actions` entier, pas sur `inQuarter`.
       fouls: player === null ? 0 : aggregateFor(actions, player.id).fouls,
       // Cumul du match, calculé sur les actions et non sur les points affichés :
       // une action dont le joueur aurait quitté le roster ne doit pas disparaître
@@ -132,8 +146,6 @@ export function useMatchData(matchId: string | null): MatchData & {
     };
   }, [matchId, quarter]);
 
-  // `revision` entre dans le tableau de dépendances : il n'est pas lu dans
-  // `read`, c'est exactement son rôle — forcer une relecture.
   const { data, loading } = useAsyncData<MatchData>(read, [read, revision]);
 
   return { ...(data ?? EMPTY), loading };

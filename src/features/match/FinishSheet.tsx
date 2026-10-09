@@ -78,14 +78,14 @@ export function FinishSheet({
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-tap-action rounded-xl border border-edge-strong bg-raised font-medium"
+            className="min-h-tap-action rounded-[10px] bg-white font-display text-lg font-light text-primary"
           >
             Continuer
           </button>
           <button
             type="button"
             onClick={() => void finish()}
-            className="min-h-tap-action rounded-xl bg-accent font-semibold text-inverse"
+            className="min-h-tap-action rounded-[10px] bg-accent font-display text-lg font-light text-inverse"
           >
             Terminer
           </button>

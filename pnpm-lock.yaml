@@ -166,6 +166,18 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/abel':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/alexandria':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/encode-sans-expanded':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/source-sans-3':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@supabase/supabase-js':
         specifier: ^2.117.2
         version: 2.117.2
@@ -416,6 +428,18 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fontsource/abel@5.3.0':
+    resolution: {integrity: sha512-SUkI0G+yaR+NvlTKNTcf1OOOph75JET6pL+P8JJn/7teunzy3DDUexzYR65p2UlK/Bk8cdIFrhnNkD4ldk5wTg==}
+
+  '@fontsource/alexandria@5.3.0':
+    resolution: {integrity: sha512-it7vTsYG4pB0G00g49z5bwdMtf41EacTIZQFSxcDRajlV4xrCAz9+0/FMoWo3GD50Ifu5+t6ta22xsmnX5Akwg==}
+
+  '@fontsource/encode-sans-expanded@5.3.0':
+    resolution: {integrity: sha512-ay7t9tx7TvBTjL6H9oAR+Z5NOWxOEXTK9IOJ2jKNtT/+j/2Sn2wpPV2E1eY716Be0kOcEFHcluzlphTZvQGt+g==}
+
+  '@fontsource/source-sans-3@5.3.0':
+    resolution: {integrity: sha512-VrWixSgF93kOVSEkwjs9ImnAbxrBew4PgcnaJYEitG9TyJSwxjFUNJIgzB1XFP/acyAWcTDg7+sWe7JI8LTB9w==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3127,6 +3151,14 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@fontsource/abel@5.3.0': {}
+
+  '@fontsource/alexandria@5.3.0': {}
+
+  '@fontsource/encode-sans-expanded@5.3.0': {}
+
+  '@fontsource/source-sans-3@5.3.0': {}
 
   '@humanfs/core@0.19.2':
     dependencies:

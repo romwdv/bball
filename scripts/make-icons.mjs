@@ -31,13 +31,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // Palette
 // ---------------------------------------------------------------------------
 
-/** Thème dark de `globals.css`, redonné ici : le script ne doit pas lire le CSS. */
-const SURFACE = [0x0b, 0x0f, 0x14];
-/** Accent de l'application. Un ballon bleu plutôt qu'orange : cohérent avec le
- *  header et les boutons, et lisible en monochrome sur l'écran d'accueil iOS. */
-const BALL = [0x3d, 0x8b, 0xfd];
-/** Coutures : la surface, pas du noir — sur fond dark, un trait noir disparaît. */
-const SEAM = [0x0b, 0x0f, 0x14];
+/** Thème clair de `globals.css`, redonné ici : le script ne doit pas lire le CSS. */
+const SURFACE = [0xe8, 0xe8, 0xe8];
+/** Accent de l'application — le orange maquette (PLAN.md §12). */
+const BALL = [0xea, 0x52, 0x34];
+/** Coutures : la surface, pas du noir — sur fond clair, un trait noir est lisible. */
+const SEAM = [0xe8, 0xe8, 0xe8];
 
 /**
  * Rayon du fond arrondi, en fraction du côté.

@@ -68,27 +68,26 @@ const POINTS = POINTS_FINISHED + 2 * LATE_BINS;
 const POINTS_AFTER_UNDO = POINTS - 2;
 
 /**
- * Points affichés dans le tableau des statistiques cumulées.
+ * Valeur d'une carte de statistique (PLAN.md §12).
  *
- * Le nom du joueur est un `th` de portée ligne, donc un `rowheader` — il n'est
- * pas compté par `getByRole("cell")`. Les cellules commencent donc à « M » (matchs
- * joués), et les points sont la **deuxième**.
+ * La carte est un bloc avec une étiquette puis une valeur : « Points » suivi
+ * de « 17 ». La lecture prend la carte (`..` = parent de l'étiquette) et en
+ * extrait le nombre.
  */
 async function pointsOf(
   page: import("@playwright/test").Page,
-  player: string,
+  label: string,
 ): Promise<number> {
-  const row = page.getByRole("row").filter({ hasText: player });
-  return Number.parseInt(
-    (await row.getByRole("cell").nth(1).innerText()).trim(),
-    10,
-  );
+  const card = page.getByText(label, { exact: true }).locator("..");
+  const text = await card.innerText();
+  const match = text.match(/-?\d+/);
+  return match === null ? NaN : Number.parseInt(match[0], 10);
 }
 
 /** Un match terminé, avec deux actions, prêt à être supprimé. */
 async function seedFinishedMatch(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Nouveau match" }).click();
+  await page.getByRole("button", { name: "Ajouter un match" }).click();
   await page.getByLabel("Adversaire").fill("BC Jetable");
   await page.getByRole("button", { name: "Commencer la saisie" }).click();
   await expect(page.getByTestId("score")).toBeVisible();
@@ -118,13 +117,12 @@ test.describe("un match de bout en bout", () => {
       page.getByRole("heading", { name: "Matchs", exact: true }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
 
-    // Le joueur est créé automatiquement et rappelé en lecture seule : il n'y a
-    // plus rien à cocher. C'est aussi ce qui garantit que la grille est
-    // saisissable immédiatement — plus de carrousel à verrouiller (PLAN.md §11).
-    await expect(page.getByText("Andreas")).toBeVisible();
+    // Le joueur est créé automatiquement (PLAN.md §11) : il n'y a plus rien à
+    // cocher, et la saisie est immédiatement opérationnelle — plus de carrousel
+    // à verrouiller.
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 
@@ -187,9 +185,11 @@ test.describe("un match de bout en bout", () => {
     await expect(foulButton).toBeVisible();
 
     // ── Annulation ──────────────────────────────────────────────────────────
-    // `exact` : le header porte aussi un bouton « Annuler la dernière action »,
-    // et Playwright fait du sous-ensemble une correspondance.
-    await page.getByRole("button", { name: "Annuler", exact: true }).click();
+    // Le bouton undo porte son libellé en `aria-label` (il n'affiche qu'une
+    // icône, PLAN.md §12).
+    await page
+      .getByRole("button", { name: "Annuler la dernière action" })
+      .click();
     await expect(page.getByText("Dernière action annulée")).toBeVisible();
 
     // Le cumul du header baisse d'exactement un point. Comme il est calculé sur
@@ -235,7 +235,7 @@ test.describe("un match de bout en bout", () => {
     // Le lien porte l'adversaire, la date et le statut dans son nom accessible :
     // une seule assertion, et pas d'ambiguïté avec le titre « Terminés ».
     await expect(
-      page.getByRole("link", { name: /vs BC Nuit .*Terminé/ }),
+      page.getByRole("link", { name: /Match terminé contre BC Nuit/ }),
     ).toBeVisible();
 
     // ── Statistiques cumulées ───────────────────────────────────────────────
@@ -243,20 +243,16 @@ test.describe("un match de bout en bout", () => {
     // ajouter un bouton de retour ne serait pas un changement de produit pour
     // le seul sake d'un test.
     await page.goto("/stats/");
-    // Le tableau liste une ligne par joueur, et il n'y en a qu'une : c'est la
-    // preuve que les stats cumulées relisent les actions du match clôturé et que
-    // le joueur suivi est bien le seul à y figurer. Le nom est un `th` de portée
-    // ligne, donc un `rowheader` et non une cellule.
-    await expect(page.getByRole("rowheader")).toHaveCount(1);
-    await expect(
-      page.getByRole("rowheader", { name: /Andreas/ }),
-    ).toBeVisible();
+    // La grille de cartes (PLAN.md §12) montre les cumuls du joueur. La carte
+    // « Points » est la preuve que les stats relisent les actions du match
+    // clôturé, et qu'une seule série de cartes existe (un seul joueur suivi).
+    await expect(page.getByText("Points", { exact: true })).toHaveCount(1);
 
     // Les totaux sont recalculés depuis les actions, jamais stockés : ils doivent
     // donc être cohérents avec le score final du match. Un export figé au moment de
     // la clôture donnerait d'autres chiffres — c'est exactement le bug que le
     // modèle append-only est censé rendre impossible.
-    await expect(pointsOf(page, "Andreas")).resolves.toBe(POINTS_AFTER_UNDO);
+    await expect(pointsOf(page, "Points")).resolves.toBe(POINTS_AFTER_UNDO);
   });
 });
 
@@ -285,7 +281,7 @@ test.describe("suppression d'un match", () => {
     await dialog.getByRole("button", { name: "Garder" }).click();
     await expect(dialog).toBeHidden();
     await expect(
-      page.getByRole("link", { name: /vs BC Jetable .*Terminé/ }),
+      page.getByRole("link", { name: /Match terminé contre BC Jetable/ }),
     ).toBeVisible();
 
     // ── Suppression effective ───────────────────────────────────────────────
@@ -301,9 +297,10 @@ test.describe("suppression d'un match", () => {
     await expect(page.getByText(/vs BC Jetable/)).toHaveCount(0);
 
     // Le match est absent des **stats cumulées** aussi : ses actions ont été
-    // supprimées, pas seulement sa fiche.
+    // supprimées, pas seulement sa fiche. Sans match terminé, la page dit
+    // explicitement qu'il n'y a rien à montrer.
     await page.goto("/stats/");
-    await expect(page.getByRole("rowheader")).toHaveCount(0);
+    await expect(page.getByText("Aucun match terminé")).toBeVisible();
   });
 
   test("supprime aussi un match en cours, depuis l'accueil", async ({
@@ -315,13 +312,15 @@ test.describe("suppression d'un match", () => {
     // Un match en cours est celui qu'on crée par erreur : il faut pouvoir
     // l'effacer sans le clôturer d'abord.
     await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Oublié");
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
 
     await page.getByRole("button", { name: "Sortir" }).click();
-    await expect(page.getByRole("link", { name: /Reprendre/ })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Match en cours contre BC Oublié/ }),
+    ).toBeVisible();
 
     await page
       .getByRole("button", { name: "Supprimer le match contre BC Oublié" })
@@ -338,7 +337,9 @@ test.describe("suppression d'un match", () => {
 
     await expect(page.getByText(/vs BC Oublié/)).toHaveCount(0);
     // Les autres matchs sont intacts : la suppression est ciblée.
-    await expect(page.getByRole("link", { name: /Reprendre/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /Match en cours contre/ }),
+    ).toHaveCount(0);
     await expect(page.getByText("Aucun match en cours")).toBeVisible();
   });
 });
@@ -402,7 +403,7 @@ test.describe("voyant de synchronisation", () => {
     // reste en file, et c'est exactement ce que le voyant doit annoncer.
     await context.setOffline(true);
     await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Hors-ligne");
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();

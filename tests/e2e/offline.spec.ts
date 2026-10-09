@@ -43,11 +43,11 @@ test.describe("hors-ligne", () => {
     await signIn(page);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Nouveau match" }),
+      page.getByRole("button", { name: "Ajouter un match" }),
     ).toBeVisible();
 
     // Un match en cours, pour avoir quoi retrouver hors-ligne.
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
@@ -106,7 +106,9 @@ test.describe("hors-ligne", () => {
     // C'est ici que se joue le test. Si la stratégie de navigation avait été
     // cache-first, `/match/` aurait été servi par le HTML de l'accueil — l'app
     // s'afficherait, l'écran serait vide, et rien n'indiquerait la cause.
-    await page.getByRole("link", { name: /Reprendre/ }).click();
+    await page
+      .getByRole("link", { name: /Match en cours contre BC Nuit/ })
+      .click();
     await expect(page.getByTestId("score")).toBeVisible();
     // Les actions ont survécu : c'est la preuve que le HTML et les données sont
     // bienvenus du cache, et pas simplement un shell vide qui se remplit ensuite.

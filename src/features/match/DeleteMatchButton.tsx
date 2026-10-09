@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { repos } from "@/data";
 import { Sheet } from "@/ui/Sheet";
+import { DeleteIcon } from "@/ui/icons";
 import type { MatchRow } from "@/data/schema";
 
 /**
@@ -83,9 +84,9 @@ export function DeleteMatchButton({
         type="button"
         onClick={() => setConfirming(true)}
         aria-label={`Supprimer le match contre ${match.opponentName}`}
-        className="min-h-tap-min min-w-tap-min shrink-0 rounded-lg border border-edge px-3 text-xs text-muted"
+        className="grid min-h-tap-min min-w-tap-min shrink-0 place-items-center rounded-full text-accent"
       >
-        Supprimer
+        <DeleteIcon className="h-7 w-7" />
       </button>
 
       <Sheet
@@ -98,7 +99,7 @@ export function DeleteMatchButton({
               type="button"
               onClick={() => setConfirming(false)}
               disabled={deleting}
-              className="min-h-tap-action flex-1 rounded-xl border border-edge-strong bg-raised font-medium disabled:opacity-40"
+              className="min-h-tap-action flex-1 rounded-[10px] bg-white font-display text-lg font-light text-primary disabled:opacity-40"
             >
               Garder
             </button>
@@ -108,7 +109,7 @@ export function DeleteMatchButton({
                 void confirm();
               }}
               disabled={deleting}
-              className="min-h-tap-action flex-1 rounded-xl bg-foul font-semibold text-primary disabled:opacity-50"
+              className="min-h-tap-action flex-1 rounded-[10px] bg-foul font-display text-lg font-light text-inverse disabled:opacity-50"
             >
               {deleting ? "Suppression…" : "Supprimer"}
             </button>

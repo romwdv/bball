@@ -54,7 +54,34 @@ describe("MatchSheet — feuille de match", () => {
     );
   }
 
-  it("affiche le score par période", async () => {
+  /** La carte d'une statistique : l'étiquette et sa valeur. */
+  function card(label: string): HTMLElement {
+    const labelNode = screen.getByText(label);
+    return labelNode.closest("div") as HTMLElement;
+  }
+
+  it("affiche les cartes de la maquette", () => {
+    renderSheet();
+    // Les douze cartes de la maquette « stats match » (PLAN.md §12).
+    for (const label of [
+      "Points",
+      "% Tirs",
+      "% 2PTS",
+      "% 3PTS",
+      "% LF",
+      "PD",
+      "INT",
+      "BP",
+      "CTR",
+      "RB",
+      "RD",
+      "RO",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it("affiche le total des points", async () => {
     await repos.actions.append(match.id, [
       {
         kind: "shot",
@@ -76,22 +103,50 @@ describe("MatchSheet — feuille de match", () => {
     });
 
     renderSheet();
-    // Scoped à la carte : les « 5 » du tableau des joueurs ne doivent pas
-    // perturber la lecture.
-    const card = screen.getByLabelText("Score par période");
-    expect(within(card).getByText("5")).toBeInTheDocument();
-    expect(within(card).getByText("3")).toBeInTheDocument();
+    expect(card("Points")).toHaveTextContent("5");
   });
 
-  it("affiche 0 pour une période sans point", () => {
+  it("filtre par période", async () => {
+    await repos.actions.append(match.id, [
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 1,
+        value: 2,
+        made: true,
+      },
+      {
+        kind: "shot",
+        playerId: roster[0]!.id,
+        quarter: 2,
+        value: 3,
+        made: true,
+      },
+    ]);
+    actions = await repos.actions.listByMatch(match.id, {
+      includeVoided: false,
+    });
+
     renderSheet();
-    // Une période à 0 est une information, pas une absence de donnée : total
-    // plus les quatre périodes, soit cinq zéros.
-    const card = screen.getByLabelText("Score par période");
-    expect(within(card).getAllByText("0")).toHaveLength(5);
+    const user = userEvent.setup();
+    const tabs = screen.getByRole("tablist", { name: "Période consultée" });
+
+    await user.click(within(tabs).getByRole("tab", { name: "Q1" }));
+    expect(card("Points")).toHaveTextContent("2");
+
+    await user.click(within(tabs).getByRole("tab", { name: "Q2" }));
+    expect(card("Points")).toHaveTextContent("3");
+
+    await user.click(within(tabs).getByRole("tab", { name: "Tout" }));
+    expect(card("Points")).toHaveTextContent("5");
   });
 
-  it("affiche les pourcentages de l'équipe", async () => {
+  it("affiche 0 pour un match sans point", () => {
+    renderSheet();
+    expect(card("Points")).toHaveTextContent("0");
+  });
+
+  it("affiche les pourcentages", async () => {
     await repos.actions.append(match.id, [
       {
         kind: "shot",
@@ -113,69 +168,14 @@ describe("MatchSheet — feuille de match", () => {
     });
 
     renderSheet();
-    // 1/2 à 2 points, 1/2 au global : deux colonnes valent 50 %.
-    const card = screen.getByLabelText("Pourcentages de l'équipe");
-    expect(within(card).getAllByText("50%")).toHaveLength(2);
+    // 1/2 au global comme à 2 points.
+    expect(card("% Tirs")).toHaveTextContent("50%");
+    expect(card("% 2PTS")).toHaveTextContent("50%");
   });
 
   it("affiche un tiret quand aucune donnée ne permet un pourcentage", () => {
     renderSheet();
-    // Un tiret par colonne sans donnée, pas de « 0/0 » trompeur.
-    const card = screen.getByLabelText("Pourcentages de l'équipe");
-    expect(within(card).getAllByText("—")).toHaveLength(4);
-  });
-
-  it("écrit la ligne d'un joueur en format `2/6`", async () => {
-    await repos.actions.append(match.id, [
-      {
-        kind: "shot",
-        playerId: roster[0]!.id,
-        quarter: 1,
-        value: 3,
-        made: true,
-      },
-      {
-        kind: "shot",
-        playerId: roster[0]!.id,
-        quarter: 1,
-        value: 3,
-        made: false,
-      },
-      {
-        kind: "shot",
-        playerId: roster[0]!.id,
-        quarter: 1,
-        value: 3,
-        made: false,
-      },
-      {
-        kind: "shot",
-        playerId: roster[0]!.id,
-        quarter: 1,
-        value: 3,
-        made: false,
-      },
-    ]);
-    actions = await repos.actions.listByMatch(match.id, {
-      includeVoided: false,
-    });
-
-    renderSheet();
-    const cell = screen
-      .getAllByRole("cell")
-      .find((cell) => cell.textContent === "1/4");
-    // C'est le format attendu par le plan : « 2/6 à 3pts ».
-    expect(cell).toBeDefined();
-  });
-
-  it("affiche une ligne à zéro pour un joueur entré sans rien faire", () => {
-    renderSheet();
-    const row = screen
-      .getAllByRole("row")
-      .find((row) => row.textContent?.includes("Dupont"));
-    // Sans cette ligne, le coach croirait à une omission du document.
-    expect(row).toBeDefined();
-    expect(within(row!).getAllByRole("cell")[1]).toHaveTextContent("0");
+    expect(card("% Tirs")).toHaveTextContent("—");
   });
 
   it("exclut les actions annulées des compteurs", async () => {
@@ -194,27 +194,7 @@ describe("MatchSheet — feuille de match", () => {
     });
 
     renderSheet();
-    // Tout est annulé : le score retombe à zéro partout.
-    const card = screen.getByLabelText("Score par période");
-    expect(within(card).getAllByText("0")).toHaveLength(5);
-  });
-
-  it("signale un joueur à 5 fautes", async () => {
-    for (let i = 0; i < 5; i += 1) {
-      const { groupId } = await repos.actions.append(match.id, [
-        { kind: "foul", playerId: roster[0]!.id, quarter: 1 },
-      ]);
-      void groupId;
-    }
-    actions = await repos.actions.listByMatch(match.id, {
-      includeVoided: false,
-    });
-
-    renderSheet();
-    const cell = screen
-      .getAllByRole("cell")
-      .find((cell) => cell.textContent === "5");
-    expect(cell).toHaveClass("text-foul");
+    expect(card("Points")).toHaveTextContent("0");
   });
 
   it("affiche un message quand le roster est vide", () => {
@@ -235,10 +215,10 @@ describe("MatchSheet — export", () => {
   it("propose les deux formats", () => {
     renderSheet();
     expect(
-      screen.getByRole("button", { name: "Exporter CSV" }),
+      screen.getByRole("button", { name: "Exporter en CSV" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Exporter JSON" }),
+      screen.getByRole("button", { name: "Exporter en JSON" }),
     ).toBeInTheDocument();
   });
 
@@ -255,7 +235,7 @@ describe("MatchSheet — export", () => {
       .mockImplementation(() => {});
 
     renderSheet();
-    await user.click(screen.getByRole("button", { name: "Exporter CSV" }));
+    await user.click(screen.getByRole("button", { name: "Exporter en CSV" }));
 
     expect(click).toHaveBeenCalledTimes(1);
     const anchor = click.mock.instances[0] as unknown as HTMLAnchorElement;
@@ -277,7 +257,7 @@ describe("MatchSheet — export", () => {
       .mockImplementation(() => {});
 
     renderSheet();
-    await user.click(screen.getByRole("button", { name: "Exporter JSON" }));
+    await user.click(screen.getByRole("button", { name: "Exporter en JSON" }));
 
     const anchor = click.mock.instances[0] as unknown as HTMLAnchorElement;
     expect(anchor.download).toBe("2026-10-05-vs-bc-nuit.json");

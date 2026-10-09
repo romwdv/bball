@@ -54,21 +54,25 @@ afterEach(async () => {
 
 async function renderPage() {
   render(<NewMatchPage />);
-  // Le joueur est chargé en asynchrone : sans cette attente, l'écran affiche
-  // « Chargement… » et le bouton reste désactivé.
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: /Commencer/ })).toBeEnabled();
+  // Le joueur est créé en asynchrone (`ensureSon` dans l'effet) et l'écran ne
+  // l'affiche plus (PLAN.md §12) : la seule façon d'attendre la fin de l'effet
+  // est d'observer la base. La plupart des tests partent de zéro joueur et
+  // doivent en voir exactement un.
+  await waitFor(async () => {
+    expect(await repos.players.listByTeam("local")).toHaveLength(1);
   });
 }
 
 describe("écran nouveau match — joueur unique", () => {
-  it("crée le joueur suivi et l'affiche", async () => {
+  it("crée le joueur suivi", async () => {
     await renderPage();
 
-    // L'identité vient du code, pas d'une saisie : elle doit donc être présente
-    // sans que le coach ait rien fait.
-    expect(screen.getByText(SON.firstName)).toBeInTheDocument();
-    expect(await repos.players.listByTeam("local")).toHaveLength(1);
+    // L'identité vient du code, pas d'une saisie. L'écran ne l'affiche plus,
+    // mais le joueur doit exister en base pour que la création du match puisse
+    // le référencer.
+    const roster = await repos.players.listByTeam("local");
+    expect(roster).toHaveLength(1);
+    expect(roster[0]!.firstName).toBe(SON.firstName);
   });
 
   it("n'affiche aucun contrôle de roster", async () => {

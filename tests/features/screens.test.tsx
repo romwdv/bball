@@ -8,6 +8,7 @@ import type { PlayerRow } from "@/data/schema";
 import { FreeThrowSheet } from "@/features/match/FreeThrowSheet";
 import { MatchHeader } from "@/features/match/MatchHeader";
 import { ActivePlayer, useMatchData } from "@/features/match/ActivePlayer";
+import { PeriodSelector } from "@/features/match/PeriodSelector";
 import { formatDate, today } from "@/features/match/formatDate";
 import { useMatchStore } from "@/features/match/store";
 import { FoulDots, PlayerBadges } from "@/ui/Badges";
@@ -96,13 +97,36 @@ describe("MatchHeader", () => {
           finishedAt: null,
           updatedAt: 0,
         }}
-        score={0}
       />,
     );
   }
 
-  it("affiche les quatre périodes", () => {
+  it("affiche l'adversaire", () => {
     renderHeader();
+    expect(screen.getByText("vs BC Nuit")).toBeInTheDocument();
+  });
+
+  it("affiche le voyant de synchronisation", () => {
+    renderHeader();
+    expect(screen.getByTestId("sync-indicator")).toBeInTheDocument();
+  });
+
+  it("affiche le nombre de lancers dus quand il y en a", () => {
+    useMatchStore.setState({ pendingFreeThrows: 2 });
+    renderHeader();
+    expect(screen.getByText("LF 2")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("PeriodSelector", () => {
+  function renderSelector() {
+    return render(<PeriodSelector />);
+  }
+
+  it("affiche les quatre périodes", () => {
+    renderSelector();
     for (const quarter of QUARTERS) {
       expect(
         screen.getByRole("tab", { name: String(quarter) }),
@@ -112,7 +136,7 @@ describe("MatchHeader", () => {
 
   it("marque la période courante", () => {
     useMatchStore.setState({ quarter: 3 });
-    renderHeader();
+    renderSelector();
     expect(screen.getByRole("tab", { name: "3" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -121,36 +145,11 @@ describe("MatchHeader", () => {
 
   it("change de période au tap", async () => {
     const user = userEvent.setup();
-    renderHeader();
+    renderSelector();
 
     await user.click(screen.getByRole("tab", { name: "4" }));
 
     expect(useMatchStore.getState().quarter).toBe(4);
-  });
-
-  it("affiche le score de la période courante", () => {
-    renderHeader();
-    // Somme des points du roster sur la période affichée.
-    expect(screen.getByText(/^0/)).toBeInTheDocument();
-  });
-
-  it("affiche le nombre de lancers dus quand il y en a", () => {
-    useMatchStore.setState({ pendingFreeThrows: 2 });
-    renderHeader();
-    expect(screen.getByText("LF 2")).toBeInTheDocument();
-  });
-
-  it("déclenche l'annulation", async () => {
-    const user = userEvent.setup();
-    renderHeader();
-
-    await user.click(screen.getByRole("button", { name: /Annuler/ }));
-
-    await waitFor(() => {
-      expect(useMatchStore.getState().notice?.text).toBe(
-        "Dernière action annulée",
-      );
-    });
   });
 });
 
@@ -168,6 +167,7 @@ describe("ActivePlayer", () => {
     return render(
       <ActivePlayer
         player={roster[0]!}
+        score={7}
         stats={{ ...aggregateFor([], "a"), points: 7 }}
         fouls={3}
       />,
@@ -177,6 +177,13 @@ describe("ActivePlayer", () => {
   it("affiche le prénom du joueur suivi", () => {
     renderBand();
     expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("affiche le score total du match", () => {
+    renderBand();
+    // `data-testid="score"` porte le cumul du match, distinct des stats de
+    // période affichées à côté.
+    expect(screen.getByTestId("score")).toHaveTextContent("7");
   });
 
   it("affiche les points de la période", () => {
@@ -196,31 +203,40 @@ describe("ActivePlayer", () => {
     // chaque période, un joueur sorti en Q1 pourrait prendre cinq fautes de
     // plus, et la feuille de match en compterait dix.
     expect(
-      screen.getAllByText((_c, node) => node?.textContent === "3/5").length,
+      screen.getAllByText((_c, node) => node?.textContent === "3 / 5").length,
     ).toBeGreaterThan(0);
   });
 
   it("affiche les pastilles de fautes", () => {
     renderBand();
-    // Le compteur est rendu en deux nœuds de texte (« 3 » puis « /5 »), donc
+    // Le compteur est rendu en deux nœuds de texte (« 3 » puis « / 5 »), donc
     // la recherche se fait sur l'élément parent qui les contient tous les deux.
     const counters = screen.getAllByText((_content, node) =>
-      /\d\/5/.test(node?.textContent ?? ""),
+      /\d \/ 5/.test(node?.textContent ?? ""),
     );
     expect(counters.length).toBeGreaterThan(0);
-    expect(counters.some((node) => node.textContent === "3/5")).toBe(true);
+    expect(counters.some((node) => node.textContent === "3 / 5")).toBe(true);
   });
 
-  it("affiche un tiret quand le joueur n'a pas encore de stats", () => {
-    render(<ActivePlayer player={roster[0]!} stats={undefined} fouls={0} />);
-    expect(screen.getByText("—")).toBeInTheDocument();
+  it("affiche le score même sans stats de période", () => {
+    // Sans stats, la carte garde le score total : c'est le chiffre que le coach
+    // annonce au banc, il ne dépend pas de la période.
+    render(
+      <ActivePlayer
+        player={roster[0]!}
+        score={17}
+        stats={undefined}
+        fouls={0}
+      />,
+    );
+    expect(screen.getByTestId("score")).toHaveTextContent("17");
   });
 
   it("ne rend rien tant que le joueur n'est pas connu", () => {
     // Le cas est transitoire, pas une erreur : la base n'a pas encore répondu.
     // Rendre une puce vide ferait clignoter l'écran à chaque ouverture.
     const { container } = render(
-      <ActivePlayer player={null} stats={undefined} fouls={0} />,
+      <ActivePlayer player={null} score={0} stats={undefined} fouls={0} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -235,17 +251,17 @@ describe("ActivePlayer", () => {
   });
 
   it("n'affiche aucun numéro de maillot", () => {
-    // Le joueur suivi n'a pas de numéro. Un « — » à sa place afficherait un
-    // manque là où il n'y a rien à afficher — et le composant ne rend le numéro
-    // dans aucun cas, donc « 4 » ne doit pas apparaître non plus.
+    // Le joueur suivi n'a pas de numéro. Avec un score à zéro, seul le « 0 »
+    // du score apparaît : aucun « 4 » (le numéro du roster) ne doit être rendu.
     render(
       <ActivePlayer
         player={{ ...roster[0]!, number: null }}
+        score={0}
         stats={undefined}
         fouls={0}
       />,
     );
-    expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("4")).not.toBeInTheDocument();
   });
 });
 
@@ -462,7 +478,7 @@ describe("FreeThrowSheet", () => {
     const user = userEvent.setup();
     renderSheet(2);
 
-    await user.click(screen.getByRole("button", { name: /Terminer|Terminé/ }));
+    await user.click(screen.getByRole("button", { name: "Valider" }));
 
     expect(useMatchStore.getState().sheet).toBeNull();
   });
@@ -624,8 +640,9 @@ describe("Badges", () => {
 
   it("affiche le compteur si demandé", () => {
     render(<FoulDots fouls={5} showCount />);
+    // La maquette formate « 5 / 5 », avec des espaces (PLAN.md §12).
     const counter = screen.getAllByText(
-      (_content, node) => node?.textContent === "5/5",
+      (_content, node) => node?.textContent === "5 / 5",
     );
     expect(counter.length).toBeGreaterThan(0);
   });
@@ -651,7 +668,8 @@ describe("Badges", () => {
         }}
       />,
     );
-    expect(container).toHaveTextContent("84R");
+    expect(container).toHaveTextContent("8pts");
+    expect(container).toHaveTextContent("4R");
     expect(container).toHaveTextContent("2P");
   });
 
@@ -659,7 +677,7 @@ describe("Badges", () => {
     const { container } = render(
       <PlayerBadges stats={aggregateFor([], "p1")} />,
     );
-    expect(container).toHaveTextContent("0");
+    expect(container).toHaveTextContent("0pts");
     expect(container.textContent).not.toContain("R");
   });
 });

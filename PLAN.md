@@ -895,13 +895,13 @@ Notes :
 
 |                         |                                                                         |
 | ----------------------- | ----------------------------------------------------------------------- |
-| **Phase courante**      | **Évolution — suivi d'un seul joueur · ✅ terminée**                    |
+| **Phase courante**      | **Évolution — refonte design · ✅ terminée**                            |
 | **Prochaine étape**     | Aucune. Déploiement et validation sur téléphone                         |
-| **Dernière action**     | 618 tests + 24 E2E · `pnpm verify` au vert · couverture 98,26 % lignes  |
+| **Dernière action**     | 618 tests + 24 E2E · `pnpm verify` au vert · budget 381,5 ko            |
 | **Phases terminées**    | Phase 0 à Phase 8. **Toutes les portes levées**                         |
 | **Porte de validation** | ✅ Levée — test sur téléphone via l'URL déployée, pas de retour négatif |
 | **Blocage**             | Aucun côté code                                                         |
-| **Prochaine phase**     | Aucune (§11 terminée)                                                   |
+| **Prochaine phase**     | Aucune (§12 terminée)                                                   |
 
 ### Ce qui reste à faire, hors code
 
@@ -1517,3 +1517,107 @@ remplacés, non contournés.
 | 2026-10-08 | Un seul fichier de test cassé, pas sept               | `screens.test.tsx` importait `PlayerCarousel`. Les fixtures multi-joueurs de `stats`, `sheet`, `claim` et `export` sont **conservées** : `createMany`, `findByNumber` et les agrégats par joueur sont toujours du code vivant, les réécrire aurait supprimé de la couverture sur du code non retiré                                   |
 | 2026-10-08 | Le smoke test passe à un joueur, et gagne un contrôle | Le changement de joueur en cours de match disparaît. Pour ne pas perdre de couverture sur le cumul, deux paniers sont désormais saisis **après** passage en Q3 : le score du header doit monter, ce que le test ne prouvait pas auparavant                                                                                            |
 | 2026-10-08 | `pnpm verify` + couverture + E2E                      | ✅ 618 tests · 24 E2E · 98,26 % lignes, 96,85 % stmts, 90,71 % branches · premier écran 379,7 ko pour un budget de 400 ko                                                                                                                                                                                                             |
+
+---
+
+## 12. Évolution — refonte design (maquette Penpot)
+
+**Décision du commanditaire (2026-10-09)** : transposer la maquette Penpot
+(fichier `bball`, 7 boards) aux sept écrans de l'application. Un seul énoncé
+dicté : **respecter la mise en forme et les design tokens**. Les données des
+boards sont des placeholders — elles sont remplacées par les données réelles.
+
+### Design system extrait de la maquette
+
+| Token          | Valeur maquette     | Valeur retenue | Pourquoi l'écart           |
+| -------------- | ------------------- | -------------- | -------------------------- |
+| Fond           | `#e8e8e8`           | identique      | —                          |
+| Cartes         | `#e3e3e3`           | identique      | —                          |
+| Blanc          | `#ffffff`           | identique      | —                          |
+| Accent         | `#df6744`           | `#c94f2b`      | blanc 3,41:1 → 4,53:1 (AA) |
+| Rouge faute    | `#ec5151`           | `#cf3c3c`      | blanc 3,58:1 → 4,81:1 (AA) |
+| Warning        | `#b97708`           | `#8a5a06`      | 3,42:1 → 5,47:1 (AA)       |
+| Texte muted    | `#aaaaaa`           | `#646464`      | 1,5:1 → 4,83:1 (AA)        |
+| Logo ballon    | `#ea5234`           | identique      | icône, pas du texte        |
+| Point sync     | `#14ae5c`           | identique      | —                          |
+| Pastille faute | `#f0980b`/`#b3b3b3` | identiques     | —                          |
+
+**Polices** (4, auto-hébergées via `@fontsource`, sous-ensembles latin) :
+`Alexandria` (marque, adversaires) · `Encode Sans Expanded` (titres, actions,
+CTA) · `Abel` (micro-labels : dates, « Tap / 400ms », badge sync) · `Source
+Sans 3` (corps, inputs, valeurs). Abel n'a qu'une graisse 400 : les « 600 » de
+la maquette rendent en 400.
+
+**Formes** : cartes-match en pilule (rayon 40) ; boutons, cartes de stats et
+inputs en rayon 10 ; header 52 px avec ombre ; sélecteurs segmentés « actif
+orange / inactif blanc ».
+
+### Correspondance écrans
+
+| Maquette      | Route                            | Rendu                                                                                                                                                                                                        |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| homepage      | `/`                              | header marque, titre « Matchs » + voyant sync, cartes pilule, bouton orange « Ajouter un match », nav bas Historique / Cumul stats                                                                           |
+| Nouveau match | `/new-match`                     | header, titre, 2 inputs blancs, bouton orange. La ligne « Joueur » de la maquette n'existe pas : supprimée (joueur implicite)                                                                                |
+| Saisie        | `/match`                         | header, contexte `vs …` + sync, sélecteur de période (4 boutons), carte joueur (score total + stats période + fautes), grille 2PTS/3PTS → combos → FAUTE/LF → RD RO PD BP CTR INT → undo + sortir → Terminer |
+| Saisie LF     | `/match` + sheet                 | panneau sombre `#111111`, une ligne par lancer (label + ✓/✗), « Valider » orange + « Fermer » blanc                                                                                                          |
+| Historique    | `/history`                       | nav retour + titre + compteur, sections « Match en cours » / « Matchs terminés », cartes pilule                                                                                                              |
+| Stats         | `/stats`                         | nav + titre + compteur, CSV orange, segment Totaux / Par match, **grille de cartes** (remplace la table triable)                                                                                             |
+| Stats match   | `/match?m=` fini + `/history?m=` | sélecteur Tout/Q1–Q4 + grille de cartes + « Exporter en CSV/JSON »                                                                                                                                           |
+
+### Écarts assumés (ergonomie > pixels)
+
+1. **Cibles tactiles** : les actions principales restent à **88 px** (la maquette
+   les met à 64), le sélecteur de période à 44 px (maquette 40). Garantie produit
+   validée sur le terrain, mesurée par l'audit tactile automatisé.
+2. **AA WCAG** : les gris et les fonds colorés de la maquette échouent au
+   contraste 4,5:1 (voir le tableau de tokens). Les valeurs retenues gardent la
+   teinte et la hiérarchie, et l'audit de contraste automatisé reste vert.
+3. **Le score total** n'a pas de place dans la maquette « Saisie » : il est porté
+   par la **carte joueur** (`data-testid="score"`), décision commanditaire.
+4. **Les split `2/6` et le compteur de fautes** n'apparaissent pas dans les
+   cartes de la maquette : retirés de la feuille de match. Les pourcentages
+   restent ; les fautes restent dans la carte joueur et la fiche de clôture.
+
+### Ce que l'implémentation a ajouté en cours de route
+
+- **Un header de marque partagé** (`src/ui/AppHeader.tsx`) et une **carte pilule
+  partagée** (`src/features/match/MatchCard.tsx`) : l'accueil et l'historique
+  n'ont plus chacun leur disposition de match.
+- **Icônes SVG écrites à la main** (`src/ui/icons.tsx`) : ballon, plus, corbeille,
+  retour, undo, historique, graphique, ✓/✗ — aucun paquet d'icônes.
+- **`Sheet` gagne une variante sombre** pour la saisie des lancers.
+- Le bouton de suppression devient une **corbeille orange** (la maquette
+  `mdi:delete-circle`) au lieu d'un libellé texte.
+- Les libellés des stats rapides suivent la maquette : `RD RO PD BP CTR INT`
+  (rebond défensif/offensif, passe, balle perdue, contre, interception).
+- L'icône PWA et le `theme_color` passent au thème clair.
+
+### Volontairement inchangé
+
+Tout le modèle : `supabase/schema.sql`, `src/sync/*`, `src/domain/*`,
+`src/data/*`. La refonte est purement présentationnelle — aucune règle métier,
+aucun format de données, aucune route n'a bougé.
+
+### Vérifications effectuées
+
+- `pnpm verify` → au vert, 7 routes `(Static)`, budget respecté
+- `pnpm test` → **618 tests** · `pnpm e2e` → **24 tests Playwright**
+- `pnpm format:check` → conforme
+- **Premier écran : 381,5 ko gzippés** (budget 400 ko) · JS total 413,0 ko
+  (budget 500 ko). Les polices n'entrent pas dans le budget premier écran
+  (elles ne sont ni JS ni CSS), mais gonflent le pré-cache hors-ligne
+  (~1 949 ko au lieu de 1 721).
+
+### Journal de l'évolution
+
+| Date       | Action                                                          | Résultat                                                                                                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-09 | Décision : refonte design d'après la maquette Penpot            | Sept boards transposés aux sept écrans. Design tokens extraits en données structurées (le modèle de lecture n'accepte pas les images). Quatre décisions commanditaire : 4 polices auto-hébergées, score sur la carte joueur, gris ajustés AA, stats en cartes |
+| 2026-10-09 | Thème clair + tokens AA (`globals.css`)                         | Fond `#e8e8e8`, cartes `#e3e3e3`, accent `#c94f2b`, rouge `#cf3c3c`, muted `#646464`, warning `#8a5a06` — tous mesurés ≥ 4,5:1, audit automatisé vert                                                                                                         |
+| 2026-10-09 | Polices auto-hébergées (`@fontsource`)                          | Alexandria, Encode Sans Expanded, Abel, Source Sans 3 en sous-ensemble latin. Build hors-ligne conservé (fichiers dans le bundle, précachés). Budget premier écran inchangé (381,5 ko)                                                                        |
+| 2026-10-09 | Composants partagés (AppHeader, MatchCard, icons, Sheet sombre) | L'accueil et l'historique partagent la même carte pilule ; la corbeille devient une icône orange ; la sheet LF passe en panneau `#111111`                                                                                                                     |
+| 2026-10-09 | Écrans transposés (7 pages + composants de saisie)              | Homepage, new-match, match (saisie + LF + feuille), history, stats, stats match. Le score total vit dans la carte joueur                                                                                                                                      |
+| 2026-10-09 | Tests adaptés                                                   | 618 unitaires · 24 E2E au vert. La feuille et les stats passent des tables aux cartes ; les tests E2E ciblent les nouvelles étiquettes (ajout de match, corbeille, cartes)                                                                                    |
+| 2026-10-09 | 🔴 Unhandled error dans `new-match`                             | L'effet `ensureSon` en fire-and-forget pouvait rejeter après la fermeture de la base de test. Rattrapé : `submit()` rappelle `ensureSon` dans son propre `try`, l'erreur ne se perd pas                                                                       |
+| 2026-10-09 | `pnpm verify` + E2E + budget                                     | ✅ 618 tests · 24 E2E · premier écran 381,5 ko (budget 400) · JS total 413,0 ko (budget 500) · format conforme |
+| 2026-10-09 | 🔴 Grille de cartes mal ordonnée (history/?m=)                    | Les cartes `wide` (col-span-2) dans un `grid-cols-3` laissaient des trous : % Tirs passait à la ligne derrière Points. Remplacé par `StatCards` (src/ui), des lignes de 2/3/4/3 cartes, ordre exact de la maquette. Appliqué aussi à /stats |

@@ -10,7 +10,10 @@ import { FinishSheet } from "@/features/match/FinishSheet";
 import { MatchSheet } from "@/features/match/MatchSheet";
 import { ActionGrid, AdvancedStatsBar } from "@/features/match/ActionGrid";
 import { ActivePlayer, useMatchData } from "@/features/match/ActivePlayer";
+import { PeriodSelector } from "@/features/match/PeriodSelector";
 import { useMatchStore } from "@/features/match/store";
+import { AppHeader } from "@/ui/AppHeader";
+import { UndoIcon } from "@/ui/icons";
 import { repos } from "@/data";
 import { Flash } from "@/ui/Flash";
 import { Toast } from "@/ui/Toast";
@@ -186,9 +189,18 @@ function MatchScreen() {
 
   return (
     <main className="flex flex-1 flex-col overflow-hidden">
-      <MatchHeader match={match} score={totalPoints} />
+      <AppHeader />
+      <MatchHeader match={match} />
 
-      <ActivePlayer player={player} stats={stats} fouls={fouls} />
+      <div className="flex flex-col gap-3 px-4 pt-1 pb-2">
+        <PeriodSelector />
+        <ActivePlayer
+          player={player}
+          score={totalPoints}
+          stats={stats}
+          fouls={fouls}
+        />
+      </div>
 
       {finished ? (
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-(--padding-safe-b)">
@@ -203,7 +215,7 @@ function MatchScreen() {
                 router.push("/");
               }}
               aria-label="Retour à l'accueil"
-              className="min-h-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
+              className="min-h-tap-min rounded-[10px] bg-white px-3 font-display text-sm text-secondary"
             >
               ‹ Accueil
             </button>
@@ -215,7 +227,7 @@ function MatchScreen() {
           />
         </div>
       ) : (
-        <div className="flex flex-1 flex-col justify-end gap-2 pb-3">
+        <div className="flex flex-1 flex-col justify-end gap-2 pb-(--padding-safe-b)">
           <CombosBar
             playerId={playerId}
             disabled={noPlayer}
@@ -249,16 +261,10 @@ function MatchScreen() {
                 void undoLast({ text: "Dernière action annulée" });
               }}
               disabled={noPlayer}
-              className="min-h-tap-min flex-1 rounded-xl border border-edge-strong bg-raised font-medium disabled:opacity-40"
+              aria-label="Annuler la dernière action"
+              className="grid min-h-tap-action w-14 shrink-0 place-items-center rounded-[10px] bg-accent disabled:opacity-40"
             >
-              Annuler
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="min-h-tap-min rounded-xl border border-warning/50 bg-warning-subtle px-4 font-medium text-warning"
-            >
-              Terminer
+              <UndoIcon className="h-6 w-6 text-inverse" />
             </button>
             <button
               type="button"
@@ -266,11 +272,19 @@ function MatchScreen() {
                 closeMatch();
                 router.push("/");
               }}
-              className="min-h-tap-min rounded-xl border border-edge px-4 text-secondary"
+              className="min-h-tap-action flex-1 rounded-[10px] bg-white font-display text-[19px] font-light text-primary"
             >
               Sortir
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="mx-4 min-h-tap-action rounded-[10px] bg-accent font-display text-2xl font-light text-inverse"
+          >
+            Terminer
+          </button>
         </div>
       )}
 

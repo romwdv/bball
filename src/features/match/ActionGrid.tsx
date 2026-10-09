@@ -7,21 +7,19 @@ import { useMatchStore } from "@/features/match/store";
 import type { HapticKind } from "@/features/match/store";
 
 /**
- * Grille d'actions (PLAN.md §4).
+ * Grille d'actions (PLAN.md §12).
  *
- * Chaque cible principale fait 88 px (`--tap-target-action`) : en gymnase, avec
- * un téléphone tenu à une main et le regard sur le terrain, une cible plus petite
- * se rate. Le coach n'a pas le temps de viser.
+ * La maquette sépare les gestes en rangées de tailles différentes : les tirs et
+ * la faute en haut (cibles de 88 px), les stats rapides en dessous (44 px). La
+ * disposition reprend la maquette, les **tailles** reprennent la garantie
+ * produit : les quatre gestes principaux restent à 88 px (`--tap-target-action`),
+ * les gestes rares à 44 px.
  *
  * Le geste unique — tap = réussi, appui 400 ms = raté — est factorisé par
- * `usePress`, donc implémenté une seule fois dans tout le projet. C'est ce qui
- * rend ce comportement testable à un seul endroit.
+ * `usePress`, donc implémenté une seule fois dans tout le projet.
  *
- * Les drafts produits ici ne portent **pas** de `groupId`. Le champ est optionnel
- * dans le schéma du domaine, et `append()` le remplit : c'est la seule façon de
- * garantir qu'un geste = un groupe annulable d'un seul coup. Les `combos.*` du
- * domaine l'exigent parce qu'ils servent à composer un lot déjà groupé ; ici on
- * écrit un seul geste à la fois, donc le champ n'a pas lieu d'être.
+ * Les drafts produits ici ne portent **pas** de `groupId` : `append()` le
+ * remplit, garantissant qu'un geste = un groupe annulable d'un seul coup.
  */
 
 export interface ActionGridProps {
@@ -29,9 +27,9 @@ export interface ActionGridProps {
   /**
    * Fautes déjà commises par le joueur suivi, sur **le match entier**.
    *
-   * Pas sur la période affichée : la limite à cinq est par rencontre, et c'est ce
-   * qui déclenche le blocage du bouton. Un compteur par période laisserait un
-   * joueur sorti en Q1 reprendre le terrain en prenant cinq fautes de plus.
+   * Pas sur la période affichée : la limite à cinq est par rencontre. Un
+   * compteur par période laisserait un joueur sorti en Q1 reprendre le terrain
+   * en prenant cinq fautes de plus.
    */
   playerFouls?: number;
   onRecord: (drafts: readonly ActionDraft[], kind: HapticKind) => Promise<void>;
@@ -40,11 +38,8 @@ export interface ActionGridProps {
 }
 
 /**
- * La période vient du store, jamais d'une prop.
- *
- * Le sélecteur Q1–Q4 du header et l'écriture en base doivent partager la même
- * valeur ; deux sources (prop + store) finiraient un jour par diverger, et
- * l'action atterrirait dans le mauvais quart temps sans aucun signal.
+ * La période vient du store, jamais d'une prop — deux sources divergeraient un
+ * jour, et l'action atterrirait dans le mauvais quart temps sans aucun signal.
  */
 export function ActionGrid({
   playerId,
@@ -53,43 +48,46 @@ export function ActionGrid({
   disabled = false,
 }: ActionGridProps) {
   const quarter = useMatchStore((state) => state.quarter);
-  const [value2, value3] = [2, 3] as const;
 
   // Un joueur sorti pour 5 fautes ne peut pas en commettre une sixième : le
   // bouton est désactivé plutôt que de laisser le coach enregistrer une faute
-  // impossible et de fausser le décompte. Le compteur affiché sur le bouton
-  // permet de voir qu'il est arrivé à 5 sans regarder le carrousel.
+  // impossible. Le compteur affiché permet de voir qu'il est arrivé à 5.
   const foulsOut = playerFouls >= FOUL_LIMIT;
 
   return (
-    <div className="grid grid-cols-2 gap-2 px-4">
-      <ShotButton
-        playerId={playerId}
-        quarter={quarter}
-        value={value2}
-        onRecord={onRecord}
-        disabled={disabled}
-      />
-      <ShotButton
-        playerId={playerId}
-        quarter={quarter}
-        value={value3}
-        onRecord={onRecord}
-        disabled={disabled}
-      />
-      <FoulButton
-        playerId={playerId}
-        quarter={quarter}
-        fouls={playerFouls}
-        onRecord={onRecord}
-        disabled={disabled || foulsOut}
-      />
-      <FreeThrowButton
-        playerId={playerId}
-        quarter={quarter}
-        onRecord={onRecord}
-        disabled={disabled}
-      />
+    <div className="flex flex-col gap-2 px-4">
+      <div className="grid grid-cols-2 gap-2">
+        <ShotButton
+          playerId={playerId}
+          quarter={quarter}
+          value={2}
+          onRecord={onRecord}
+          disabled={disabled}
+        />
+        <ShotButton
+          playerId={playerId}
+          quarter={quarter}
+          value={3}
+          onRecord={onRecord}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FoulButton
+          playerId={playerId}
+          quarter={quarter}
+          fouls={playerFouls}
+          onRecord={onRecord}
+          disabled={disabled || foulsOut}
+        />
+        <FreeThrowButton
+          playerId={playerId}
+          quarter={quarter}
+          onRecord={onRecord}
+          disabled={disabled}
+        />
+      </div>
     </div>
   );
 }
@@ -111,28 +109,12 @@ function ShotButton({
   const { handlers, isPressed } = usePress({
     onTap: () =>
       onRecord(
-        [
-          {
-            kind: "shot",
-            playerId,
-            quarter,
-            value,
-            made: true,
-          },
-        ],
+        [{ kind: "shot", playerId, quarter, value, made: true }],
         "made",
       ),
     onLongPress: () =>
       onRecord(
-        [
-          {
-            kind: "shot",
-            playerId,
-            quarter,
-            value,
-            made: false,
-          },
-        ],
+        [{ kind: "shot", playerId, quarter, value, made: false }],
         "missed",
       ),
   });
@@ -142,14 +124,18 @@ function ShotButton({
       type="button"
       disabled={disabled}
       aria-label={`${value} points — tap réussi, appui 400 ms raté`}
-      className={`flex min-h-tap-action flex-col items-center justify-center rounded-xl border transition-colors ${
-        isPressed ? "border-made bg-made/25" : "border-edge-strong bg-raised"
+      className={`flex min-h-tap-action flex-col items-center justify-center rounded-[10px] transition-colors ${
+        isPressed ? "border-2 border-made bg-made-subtle" : "bg-white"
       } ${disabled ? "opacity-40" : ""}`}
       style={{ touchAction: "none" }}
       {...handlers}
     >
-      <span className="text-xl font-bold">{value} PTS</span>
-      <span className="text-xs text-muted">tap / 400 ms</span>
+      <span className="font-display text-[19px] font-light text-primary">
+        {value} PTS
+      </span>
+      <span className="font-label text-[13px] font-semibold text-muted">
+        Tap / 400ms
+      </span>
     </button>
   );
 }
@@ -171,23 +157,21 @@ function FoulButton({
     <button
       type="button"
       disabled={disabled}
-      // L'intitulé annonce *pourquoi* le bouton est mort, sinon le coach
-      // conclut que l'app a planté et il tape plus fort.
       aria-label={
         out
           ? `Faute — ${FOUL_LIMIT} fautes, joueur sorti`
           : `Faute ${fouls + 1} sur ${FOUL_LIMIT}`
       }
-      className={`flex min-h-tap-action flex-col items-center justify-center rounded-xl border text-lg font-semibold transition-colors ${
-        isPressed
-          ? "border-foul bg-foul/25"
-          : "border-foul/40 bg-foul-subtle text-foul"
+      className={`flex min-h-tap-action flex-col items-center justify-center rounded-[10px] transition-colors ${
+        isPressed ? "opacity-70" : ""
       } ${disabled ? "opacity-40" : ""}`}
-      style={{ touchAction: "none" }}
+      style={{ touchAction: "none", backgroundColor: "#ec5151" }}
       {...handlers}
     >
-      FAUTE
-      <span className="tabular text-xs font-normal opacity-80">
+      <span className="font-display text-[19px] font-light text-inverse">
+        FAUTE
+      </span>
+      <span className="tabular font-label text-[13px] font-semibold text-inverse/80">
         {Math.min(fouls + 1, FOUL_LIMIT)}/{FOUL_LIMIT}
       </span>
     </button>
@@ -197,27 +181,10 @@ function FoulButton({
 function FreeThrowButton({ playerId, quarter, onRecord, disabled }: CellProps) {
   const { handlers, isPressed } = usePress({
     onTap: () =>
-      onRecord(
-        [
-          {
-            kind: "free_throw",
-            playerId,
-            quarter,
-            made: true,
-          },
-        ],
-        "made",
-      ),
+      onRecord([{ kind: "free_throw", playerId, quarter, made: true }], "made"),
     onLongPress: () =>
       onRecord(
-        [
-          {
-            kind: "free_throw",
-            playerId,
-            quarter,
-            made: false,
-          },
-        ],
+        [{ kind: "free_throw", playerId, quarter, made: false }],
         "missed",
       ),
   });
@@ -227,20 +194,24 @@ function FreeThrowButton({ playerId, quarter, onRecord, disabled }: CellProps) {
       type="button"
       disabled={disabled}
       aria-label="Lancer libre — tap réussi, appui 400 ms raté"
-      className={`flex min-h-tap-action flex-col items-center justify-center rounded-xl border transition-colors ${
-        isPressed ? "border-made bg-made/25" : "border-edge-strong bg-raised"
+      className={`flex min-h-tap-action flex-col items-center justify-center rounded-[10px] transition-colors ${
+        isPressed ? "border-2 border-made bg-made-subtle" : "bg-white"
       } ${disabled ? "opacity-40" : ""}`}
       style={{ touchAction: "none" }}
       {...handlers}
     >
-      <span className="text-xl font-bold">LF</span>
-      <span className="text-xs text-muted">tap / 400 ms</span>
+      <span className="font-display text-[19px] font-light text-primary">
+        LF
+      </span>
+      <span className="font-label text-[13px] font-semibold text-muted">
+        Tap / 400ms
+      </span>
     </button>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Stats avancées
+// Stats rapides
 // ---------------------------------------------------------------------------
 
 interface AdvancedButton {
@@ -249,52 +220,52 @@ interface AdvancedButton {
   build: (playerId: string, quarter: Quarter) => ActionDraft[];
 }
 
+/**
+ * Libellés de la maquette (PLAN.md §12) : RD, RO, PD, BP, CTR, INT.
+ */
 const ADVANCED: readonly AdvancedButton[] = [
   {
-    label: "RB",
-    name: "Rebond offensif",
-    build: (playerId, quarter) => [
-      { kind: "rebound", playerId, quarter, side: "offensive" },
-    ],
-  },
-  {
-    label: "RB+",
+    label: "RD",
     name: "Rebond défensif",
     build: (playerId, quarter) => [
       { kind: "rebound", playerId, quarter, side: "defensive" },
     ],
   },
   {
-    label: "P",
+    label: "RO",
+    name: "Rebond offensif",
+    build: (playerId, quarter) => [
+      { kind: "rebound", playerId, quarter, side: "offensive" },
+    ],
+  },
+  {
+    label: "PD",
     name: "Passe décisive",
     build: (playerId, quarter) => [{ kind: "assist", playerId, quarter }],
   },
   {
-    label: "PD",
+    label: "BP",
     name: "Perte de balle",
     build: (playerId, quarter) => [{ kind: "turnover", playerId, quarter }],
   },
   {
-    label: "CT",
+    label: "CTR",
     name: "Contre",
     build: (playerId, quarter) => [{ kind: "block", playerId, quarter }],
   },
   {
-    label: "IC",
+    label: "INT",
     name: "Interception",
     build: (playerId, quarter) => [{ kind: "steal", playerId, quarter }],
   },
 ];
 
 /**
- * Bandeau des stats avancées.
+ * Bandeau des stats rapides.
  *
  * Cibles de 44 px et non 88 : ces gestes sont bien plus rares qu'un tir, et un
  * joueur y passe plus de temps. Les mélanger aux cibles de 88 px aplatirait la
- * hiérarchie visuelle du plan §4 ; les mettre en dessous la préserve.
- *
- * Un seul geste, pas de tap/appui long : ces actions n'ont pas d'état binaire,
- * donc le geste long n'aurait aucun sens à déclencher.
+ * hiérarchie visuelle de la maquette.
  */
 export interface AdvancedStatsBarProps {
   playerId: string;
@@ -345,8 +316,8 @@ function AdvancedCell({
       type="button"
       disabled={disabled}
       aria-label={definition.name}
-      className={`min-h-tap-min rounded-lg border text-sm font-semibold transition-colors ${
-        isPressed ? "border-accent bg-accent-subtle" : "border-edge bg-raised"
+      className={`min-h-tap-min rounded-[10px] font-display text-[19px] font-light text-primary transition-colors ${
+        isPressed ? "bg-accent-subtle" : "bg-white"
       } ${disabled ? "opacity-40" : ""}`}
       style={{ touchAction: "none" }}
       {...handlers}

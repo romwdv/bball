@@ -3,23 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { repos } from "@/data";
-import type { PlayerRow } from "@/data/schema";
 import { formatDate, today } from "@/features/match/formatDate";
 import { hapticNeutral } from "@/ui/haptics";
-import { playerLabel } from "@/domain/stats";
+import { AppHeader } from "@/ui/AppHeader";
 
 /**
- * Création d'un match.
+ * Création d'un match (PLAN.md §12).
  *
- * L'application ne suit qu'**un seul joueur** (PLAN.md §11) : il n'y a plus de
- * roster à cocher ni de formulaire d'ajout. L'écran tient en deux champs — puis
- * « Commencer la saisie » — ce qui est exactement le nombre de gestes que le
- * coach faisait *après* avoir ignoré la liste de cases.
- *
- * Le joueur n'est pas demandé ici : `ensureSon()` le crée au premier lancement et
- * l'adopte ensuite. Son prénom est donc rappelé sous les champs, pour que le
- * coach vérifie d'un coup d'œil qu'il saisit bien les stats du bon joueur — la
- * seule information que l'écran retire à la saisie.
+ * Deux champs, un bouton — la maquette ne montre rien d'autre, et c'est
+ * exactement le nombre de gestes utiles : l'adversaire, la date, et lancer la
+ * saisie. Le joueur n'est plus rappelé : l'application ne suit qu'**un seul
+ * joueur** (PLAN.md §11), le match est donc implicitement le sien.
  */
 
 export default function NewMatchPage() {
@@ -27,8 +21,6 @@ export default function NewMatchPage() {
 
   const [opponent, setOpponent] = useState("");
   const [date, setDate] = useState(() => today());
-  const [son, setSon] = useState<PlayerRow | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,23 +28,22 @@ export default function NewMatchPage() {
     void (async () => {
       const store = repos();
       const team = await store.teams.ensureLocal();
-      const player = await store.players.ensureSon(team.id);
-      setSon(player);
-      setLoading(false);
-    })();
+      // Garantit que le joueur existe avant la première création. L'écran n'a
+      // rien à afficher de lui, mais `matches.create` exige un `playerIds` non
+      // vide : `ensureSon` rend ce prérequis toujours satisfait.
+      await store.players.ensureSon(team.id);
+    })().catch(() => {
+      // Fire-and-forget assumé : si la pré-création échoue (base fermée, accès
+      // concurrent), `submit()` appelle de nouveau `ensureSon` dans son propre
+      // `try` — l'erreur ne se perd donc pas, elle est juste déplacée au moment
+      // où l'on en a besoin. La laisser remonter produirait un rejet non géré.
+    });
   }, []);
 
   async function submit() {
     const trimmed = opponent.trim();
     if (trimmed === "") {
       setError("Indiquez l'adversaire.");
-      return;
-    }
-    // Sans joueur, le match n'aurait aucun `playerId` : la saisie se retrouverait
-    // sans auteur et les statistiques cumulées seraient vides. Mieux vaut refuser
-    // que créer un match qui ne pourra jamais être rempli.
-    if (son === null) {
-      setError("Le joueur n'est pas encore prêt.");
       return;
     }
     if (saving) return;
@@ -62,6 +53,7 @@ export default function NewMatchPage() {
     try {
       const store = repos();
       const team = await store.teams.ensureLocal();
+      const son = await store.players.ensureSon(team.id);
       const match = await store.matches.create(team.id, {
         opponentName: trimmed,
         date,
@@ -79,92 +71,59 @@ export default function NewMatchPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pt-(--padding-safe-t) pb-(--padding-safe-b)">
-      <header className="flex items-center gap-2 pt-4">
+    <main className="flex flex-1 flex-col overflow-y-auto pt-(--padding-safe-t) pb-(--padding-safe-b)">
+      <AppHeader />
+
+      <div className="flex flex-1 flex-col gap-6 px-4 pt-4">
+        <h1 className="font-display text-[19px] font-normal text-primary">
+          Nouveau match
+        </h1>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-secondary">Adversaire</span>
+          <input
+            value={opponent}
+            onChange={(event) => setOpponent(event.target.value)}
+            placeholder="BC Nuit"
+            autoComplete="off"
+            className={INPUT_CLASS}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-secondary">Date</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className={`tabular ${INPUT_CLASS}`}
+          />
+          <span className="tabular text-xs text-muted">{formatDate(date)}</span>
+        </label>
+
+        {error !== null && (
+          <p role="alert" className="text-sm text-foul">
+            {error}
+          </p>
+        )}
+
         <button
           type="button"
-          onClick={() => router.back()}
-          aria-label="Retour"
-          className="min-h-tap-min min-w-tap-min rounded-lg border border-edge text-sm"
+          onClick={() => void submit()}
+          disabled={saving}
+          className="mt-auto min-h-tap-action w-full rounded-[10px] bg-accent font-display text-2xl font-light text-inverse disabled:opacity-50"
         >
-          ‹
+          {saving ? "Création…" : "Commencer la saisie"}
         </button>
-        <h1 className="text-xl font-semibold">Nouveau match</h1>
-      </header>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-secondary">Adversaire</span>
-        <input
-          value={opponent}
-          onChange={(event) => setOpponent(event.target.value)}
-          placeholder="BC Nuit"
-          autoComplete="off"
-          className={INPUT_CLASS}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-secondary">Date</span>
-        <input
-          type="date"
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-          className={`tabular ${INPUT_CLASS}`}
-        />
-        <span className="tabular text-xs text-muted">{formatDate(date)}</span>
-      </label>
-
-      {/*
-        Le joueur suivi, en lecture seule. L'identité vient du code
-        (`SON`) : l'afficher ici est le seul moyen pour le coach de vérifier
-        qu'il ouvre la bonne feuille, et la seule ligne que cet écran affiche
-        en plus des deux champs.
-      */}
-      <section className="surface-card flex items-baseline justify-between gap-3 px-4 py-3">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">
-          Joueur
-        </span>
-        {loading ? (
-          <span className="text-sm text-muted">Chargement…</span>
-        ) : son === null ? (
-          <span className="text-sm text-foul">Indisponible</span>
-        ) : (
-          // `text-lg` et non `text-base` : le thème définit une couleur
-          // `--color-base`, donc Tailwind v4 lit `text-base` comme une **couleur**
-          // — et le prénom s'afficherait en `--surface-base` sur une carte, donc
-          // noir sur noir. Trouvé par l'audit de contraste AA.
-          <span className="truncate text-lg font-medium text-primary">
-            {playerLabel(son)}
-          </span>
-        )}
-      </section>
-
-      {error !== null && (
-        <p role="alert" className="text-sm text-foul">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => void submit()}
-        disabled={saving || son === null}
-        className="sticky bottom-2 min-h-tap-action w-full rounded-xl bg-accent text-lg font-semibold text-inverse disabled:opacity-50"
-      >
-        {saving ? "Création…" : "Commencer la saisie"}
-      </button>
+      </div>
     </main>
   );
 }
 
 /**
- * Classe commune des champs de saisie.
- *
- * `text-primary` est explicite et non hérité : sur un `<input>`, la couleur du
- * texte vient de la feuille de l'agent utilisateur (`FieldText`), pas du body —
- * Tailwind v4 ne réinitialise pas cette propriété. Résultat observé : du texte
- * noir sur fond sombre, invisible. Le compositeur du thème fixait bien `body`, ce qui
- * laissait croire que l'héritage couvrait le cas.
+ * Champ blanc, comme la maquette (PLAN.md §12) : fond blanc, rayon 10, texte
+ * Source Sans 3. `text-primary` est explicite et non hérité — sur un `<input>`,
+ * la couleur du texte vient de la feuille de l'agent utilisateur, pas du body.
  */
 const INPUT_CLASS =
-  "min-h-tap-min rounded-xl border border-edge bg-raised text-base text-primary outline-none placeholder:text-muted focus:border-accent";
+  "min-h-tap-min rounded-[10px] border border-edge bg-white px-4 text-base text-primary outline-none placeholder:text-muted focus:border-accent";

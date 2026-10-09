@@ -25,10 +25,25 @@ export interface SheetProps {
   children: ReactNode;
   /** Pied de fiche, typiquement la rangée de boutons d'action. */
   footer?: ReactNode;
+  /**
+   * `dark` — fiche sombre (`--surface-overlay`), pour la saisie des lancers où
+   * la maquette (PLAN.md §12) pose un panneau `#111111`. Tout le contenu passe
+   * en `text-inverse`.
+   */
+  variant?: "light" | "dark";
 }
 
-export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
+export function Sheet({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+  variant = "light",
+}: SheetProps) {
   if (!open) return null;
+
+  const dark = variant === "dark";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
@@ -38,14 +53,32 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-edge-strong bg-raised pb-(--padding-safe-b)"
+        className={`relative flex max-h-[85dvh] flex-col rounded-t-[10px] pb-(--padding-safe-b) ${
+          dark
+            ? "bg-overlay text-inverse"
+            : "rounded-t-2xl border-t border-edge-strong bg-white text-primary"
+        }`}
       >
-        <header className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3 pt-(--padding-safe-t)">
-          <h2 className="text-base font-semibold">{title}</h2>
+        <header
+          className={`flex items-center justify-between gap-3 px-4 py-3 pt-(--padding-safe-t) ${
+            dark ? "" : "border-b border-edge"
+          }`}
+        >
+          <h2
+            className={
+              dark
+                ? "font-label text-xl font-normal"
+                : "text-base font-semibold"
+            }
+          >
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-tap-min min-w-tap-min rounded-lg text-sm text-secondary"
+            className={`min-h-tap-min min-w-tap-min rounded-lg text-sm ${
+              dark ? "text-secondary" : "text-secondary"
+            }`}
           >
             Fermer
           </button>
@@ -56,7 +89,9 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
         </div>
 
         {footer !== undefined && (
-          <div className="border-t border-edge px-4 py-3">{footer}</div>
+          <div className={`px-4 py-3 ${dark ? "" : "border-t border-edge"}`}>
+            {footer}
+          </div>
         )}
       </div>
     </div>

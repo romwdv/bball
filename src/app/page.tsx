@@ -5,28 +5,24 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { repos } from "@/data";
 import type { MatchRow } from "@/data/schema";
-import { MatchStatus } from "@/domain/types";
-import { formatDate } from "@/features/match/formatDate";
+import { AppHeader } from "@/ui/AppHeader";
+import { ChartIcon, HistoryIcon, PlusIcon } from "@/ui/icons";
+import { MatchCard } from "@/features/match/MatchCard";
 import { useAuthStore } from "@/features/auth/store";
-import { DeleteMatchButton } from "@/features/match/DeleteMatchButton";
 import { InstallPrompt } from "@/features/pwa/InstallPrompt";
 import { SyncIndicator } from "@/features/sync/SyncIndicator";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
- * Écran d'accueil : les matchs en cours, et le bouton pour en créer un.
+ * Écran d'accueil (PLAN.md §12) : les matchs en cours, le bouton pour en créer
+ * un, et la navigation vers l'historique et les stats cumulées.
  *
- * L'ordre de priorité est délibéré. En arrivant sur l'app en bord de terrain, la
- * seule question qui compte est « quel match je reprends ? ». La liste est donc
- * limitée aux matchs non terminés, avec le plus récent en tête. L'historique
- * complet est l'écran `/history`, qui n'existera qu'en phase 5.
+ * Reprend la maquette : header de marque, titre « Matchs » avec le voyant de
+ * synchronisation, cartes pilule des matchs ouverts, bouton orange « Ajouter un
+ * match », et deux cartes de navigation en bas. L'ordre de priorité est délibéré
+ * — en arrivant en bord de terrain, la seule question est « quel match je
+ * reprends ? », donc la liste des matchs non terminés vient en premier.
  */
-
-const STATUS_LABEL: Record<MatchStatus, string> = {
-  draft: "Brouillon",
-  live: "En cours",
-  finished: "Terminé",
-};
 
 interface HomeData {
   unfinished: MatchRow[];
@@ -44,17 +40,10 @@ export default function HomePage() {
 
   const load = useCallback(async (): Promise<HomeData> => {
     const store = repos();
-    // L'équipe n'est plus identifiée par une constante : après la première
-    // connexion, `claimTeam()` lui a donné un `uuid` (la constante `"local"`
-    // n'est pas un identifiant acceptable par le cloud, et elle serait la même
-    // sur tous les appareils). « Existe-t-elle ? » se demande donc au store.
     const existing = await store.teams.list();
     const team = await store.teams.ensureLocal();
     const unfinished = await store.matches.listUnfinished(team.id);
 
-    // Comptage des actions, pour que la confirmation de suppression dise « 40
-    // actions seront perdues » plutôt qu'un nom d'adversaire — seul le premier
-    // permet de vérifier qu'on choisit le bon match.
     const actions =
       unfinished.length === 0
         ? []
@@ -77,8 +66,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // Forcé après une suppression, pour la même raison que dans l'historique :
-  // sans relecture, le match effacé resterait dans la liste.
   const [revision, setRevision] = useState(0);
   const onDeleted = useCallback(() => {
     setRevision((current) => current + 1);
@@ -86,130 +73,79 @@ export default function HomePage() {
 
   const { data, loading } = useAsyncData<HomeData>(load, [load, revision]);
   const unfinished = data?.unfinished ?? [];
-  const resume = unfinished[0];
 
   return (
-    <main className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 pt-(--padding-safe-t) pb-(--padding-safe-b)">
-      <header className="pt-4">
-        <h1 className="text-2xl font-semibold">Matchs</h1>
-        <p className="mt-1 text-sm text-secondary">
-          Saisie hors-ligne, synchronisée dès que le réseau revient.
-        </p>
-      </header>
+    <main className="flex flex-1 flex-col overflow-y-auto pt-(--padding-safe-t) pb-(--padding-safe-b)">
+      <AppHeader />
 
-      {data?.recreated === true && (
-        <p className="rounded-xl border border-warning/40 bg-warning-subtle px-4 py-3 text-sm text-warning">
-          Équipe locale absente — elle a été recréée.
-        </p>
-      )}
+      <div className="flex flex-1 flex-col gap-5 px-4 pt-4">
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-[19px] font-normal text-primary">
+            Matchs
+          </h1>
+          <SyncIndicator variant="chip" />
+        </div>
 
-      {resume !== undefined && (
-        <Link
-          href={`/match/?m=${resume.id}`}
-          className="surface-card flex min-h-tap-action flex-col justify-center gap-1 px-4 py-4"
-        >
-          <span className="text-xs font-medium uppercase tracking-wide text-accent">
-            Reprendre · {STATUS_LABEL[resume.status]}
-          </span>
-          <span className="text-lg font-semibold">
-            vs {resume.opponentName}
-          </span>
-          <span className="tabular text-sm text-secondary">
-            {formatDate(resume.date)}
-          </span>
-        </Link>
-      )}
+        {data?.recreated === true && (
+          <p className="rounded-[10px] bg-warning-subtle px-4 py-3 text-sm text-warning">
+            Équipe locale absente — elle a été recréée.
+          </p>
+        )}
 
-      <button
-        type="button"
-        onClick={() => router.push("/new-match/")}
-        className="min-h-tap-action w-full rounded-xl bg-accent text-lg font-semibold text-inverse"
-      >
-        Nouveau match
-      </button>
+        {loading && <p className="text-sm text-muted">Chargement…</p>}
 
-      <section aria-label="Matchs non terminés" className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-secondary">
-          {loading
-            ? "Chargement…"
-            : unfinished.length === 0
-              ? "Aucun match en cours"
-              : "Tous les matchs ouverts"}
-        </h2>
+        {!loading && unfinished.length === 0 && (
+          <p className="mt-4 text-center text-sm text-muted">
+            Aucun match en cours. Créez-en un pour commencer la saisie.
+          </p>
+        )}
 
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {unfinished.map((match) => (
-            <li key={match.id} className="flex items-center gap-2">
-              <Link
-                href={`/match/?m=${match.id}`}
-                className="surface-card flex min-h-tap-min flex-1 items-center justify-between px-4 py-3"
-              >
-                <span className="flex flex-col">
-                  <span className="font-medium">vs {match.opponentName}</span>
-                  <span className="tabular text-xs text-muted">
-                    {formatDate(match.date)}
-                  </span>
-                </span>
-                <span className="rounded-full border border-edge px-2 py-0.5 text-xs text-secondary">
-                  {STATUS_LABEL[match.status]}
-                </span>
-              </Link>
-              {/* Sur un match en cours, le bouton est indispensable : c'est
-                  celui qu'on crée par erreur, et il faut pouvoir l'effacer sans
-                  le clôturer d'abord. */}
-              <DeleteMatchButton
-                match={match}
-                actionCount={data?.actionCounts.get(match.id) ?? 0}
-                onDeleted={onDeleted}
-              />
-            </li>
+            <MatchCard
+              key={match.id}
+              match={match}
+              href={`/match/?m=${match.id}`}
+              actionCount={data?.actionCounts.get(match.id) ?? 0}
+              onDeleted={onDeleted}
+            />
           ))}
         </ul>
-      </section>
 
-      <nav className="mt-auto grid grid-cols-2 gap-2 pb-2">
-        <Link
-          href="/history/"
-          className="min-h-tap-min rounded-xl border border-edge px-4 py-3 text-center text-sm text-secondary"
+        <button
+          type="button"
+          onClick={() => router.push("/new-match/")}
+          className="flex min-h-tap-action items-center justify-center gap-2 rounded-[10px] bg-accent font-display text-[19px] font-semibold text-inverse"
         >
-          Historique
-        </Link>
-        <Link
-          href="/stats/"
-          className="min-h-tap-min rounded-xl border border-edge px-4 py-3 text-center text-sm text-secondary"
-        >
-          Stats cumulées
-        </Link>
-      </nav>
+          <PlusIcon className="h-6 w-6 text-inverse" />
+          Ajouter un match
+        </button>
 
-      {/*
-        Voyant de synchronisation, au-dessus de la liste.
+        <nav className="mt-auto grid grid-cols-2 gap-3 pb-2">
+          <Link
+            href="/history/"
+            className="flex min-h-tap-action items-center gap-3 rounded-[10px] bg-white px-4 py-3"
+          >
+            <HistoryIcon className="h-7 w-7 shrink-0 text-accent" />
+            <span className="font-display text-[19px] font-light text-primary">
+              Historique
+            </span>
+          </Link>
+          <Link
+            href="/stats/"
+            className="flex min-h-tap-action items-center gap-3 rounded-[10px] bg-white px-4 py-3"
+          >
+            <ChartIcon className="h-7 w-7 shrink-0 text-accent" />
+            <span className="font-display text-[19px] font-light text-primary">
+              Cumul stats
+            </span>
+          </Link>
+        </nav>
+      </div>
 
-        C'est l'écran où l'on **supprime** un match, donc le seul endroit où une
-        attente est indiscernable d'une réussite : la suppression est immédiate en
-        local et différée sur le réseau. Sans ce bandeau, « 2 en attente » ne se
-        dit nulle part — et le coach n'a aucun moyen de savoir que son geste
-        n'est pas encore arrivé.
-      */}
-      <SyncIndicator variant="banner" />
-
-      {/*
-        Invite à installer, juste sous le voyant : c'est le dernier endroit de
-        l'écran où elle ne masque aucun contenu, et le premier que le coach voit
-        sans avoir à faire défiler. L'écran d'accueil est aussi le seul moment
-        pertinent — pendant un match, personne n'installe une application.
-      */}
       <InstallPrompt />
 
-      {/*
-        Déconnexion, volontairement discrète et tout en bas de l'écran.
-
-        L'écran d'accueil est le seul endroit qui soit à la fois accessible au
-        repos et sans risque : se déconnecter au milieu d'un match laisserait une
-        saisie non synchronisée, donc la sortie de session n'a pas sa place dans
-        le header de saisie.
-      */}
-      <footer className="flex items-center justify-between gap-3 pb-2">
+      <footer className="flex items-center justify-between gap-3 px-4 py-3">
         <span className="truncate text-xs text-muted">{email}</span>
         <button
           type="button"
@@ -217,7 +153,7 @@ export default function HomePage() {
             void signOut();
           }}
           disabled={busy}
-          className="min-h-tap-min shrink-0 rounded-lg border border-edge px-3 text-xs text-secondary disabled:opacity-50"
+          className="min-h-tap-min shrink-0 rounded-[10px] bg-white px-3 text-xs text-secondary disabled:opacity-50"
         >
           Déconnexion
         </button>

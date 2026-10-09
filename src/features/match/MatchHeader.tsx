@@ -1,112 +1,51 @@
 "use client";
 
-import { QUARTERS, type Quarter } from "@/domain/types";
 import type { MatchRow } from "@/data/schema";
-import { useMatchStore } from "@/features/match/store";
 import { formatDate } from "@/features/match/formatDate";
 import { SyncIndicator } from "@/features/sync/SyncIndicator";
+import { useMatchStore } from "@/features/match/store";
 
 /**
- * Header compact : période, score, annulations, synchronisation.
+ * Ligne de contexte du match (PLAN.md §12).
  *
- * Tout est sur une seule ligne de 44 px. Un header qui prend le tiers de l'écran
- * sur un téléphone de 6 pouces vole la place aux actions, qui sont le seul contenu
- * qui compte ici.
+ * L'adversaire à gauche, le voyant de synchronisation à droite — c'est la
+ * rangée qui dit « quel match je saisis et où en est la sync ». Le score total
+ * et la période ont quitté ce header : le score est sur la carte du joueur,
+ * la période dans sa propre rangée (`PeriodSelector`).
  *
- * Le sélecteur de période est là plutôt que dans un menu : passer de Q2 à Q3
- * arrive quelques fois par match, et un tap sur « Q3 » coûte une seconde alors
- * qu'un menu en coûte quatre.
+ * Le compteur de lancers dus reste ici : il signale une fiche de saisie ouverte,
+ * qui bloque le reste de la grille — il ne doit pas passer inaperçu.
  */
 
 export interface MatchHeaderProps {
   match: MatchRow;
-  /**
-   * Score du match entier, toutes périodes confondues.
-   *
-   * Cumul, et non score de la période : c'est le chiffre que le coach annonce au
-   * banc, et il ne doit pas se remettre à zéro quand il passe de Q2 à Q3. Le
-   * détail par période reste lisible dans la feuille de match, où il a sa place.
-   */
-  score: number;
 }
 
-export function MatchHeader({ match, score }: MatchHeaderProps) {
-  const quarter = useMatchStore((state) => state.quarter);
-  const setQuarter = useMatchStore((state) => state.setQuarter);
-  const undoLast = useMatchStore((state) => state.undoLast);
+export function MatchHeader({ match }: MatchHeaderProps) {
   const pendingFreeThrows = useMatchStore((state) => state.pendingFreeThrows);
 
   return (
-    <header className="flex items-center gap-2 border-b border-edge px-(--padding-safe-l) pt-(--padding-safe-t) pb-(--padding-safe-r)">
-      <button
-        type="button"
-        onClick={() => {
-          void undoLast({ text: "Dernière action annulée" });
-        }}
-        aria-label="Annuler la dernière action"
-        className="min-h-tap-min min-w-tap-min shrink-0 rounded-lg border border-edge px-3 text-sm"
-      >
-        ↶
-      </button>
-
-      <div
-        role="tablist"
-        aria-label="Période"
-        className="flex shrink-0 overflow-hidden rounded-lg border border-edge"
-      >
-        {QUARTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={value === quarter}
-            onClick={() => setQuarter(value as Quarter)}
-            // `w-11` = 44 px : la largeur du sélecteur de période est mesurée, pas
-            // supposée. En `w-8` (32 px) les quatre onglets ne respectaient pas la
-            // cible tactile minimale, alors que c'est le seul élément du header
-            // réellement pressé en match — passer de Q1 à Q2 arrive quelques fois
-            // par rencontre.
-            className={`tabular min-h-tap-min w-11 text-sm font-semibold transition-colors ${
-              value === quarter
-                ? "bg-accent text-inverse"
-                : "bg-raised text-secondary"
-            }`}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-
-      {/* `data-testid` plutôt qu'un libellé accessible : la valeur est déjà du
-        texte visible et lisible, l'attribut ne sert qu'à cibler le nombre
-        exactement, sans attraper le « 2 » d'un numéro de maillot voisin. */}
+    <div className="flex items-center justify-between px-4 py-1">
       <span
-        className="tabular flex flex-1 items-baseline justify-center gap-1 text-center"
-        // La date et le statut n'ont pas de place dans le header : ils restent
-        // accessibles au survol, où le coach les cherche s'il reprend un match
-        // d'il y a trois semaines.
+        className="min-w-0 truncate font-display text-[19px] text-primary"
         title={`${formatDate(match.date)} · ${match.status}`}
       >
-        {/* Score et adversaire dans des nœuds séparés : le score est la valeur
-          que le coach lit en premier, et un test ne doit pas avoir à découper
-          « 2 · vs BC Nuit » pour la retrouver. */}
-        <span data-testid="score" className="text-2xl font-bold">
-          {score}
-        </span>
-        <span className="text-sm font-normal text-muted">
-          · vs {match.opponentName}
-        </span>
+        vs {match.opponentName}
       </span>
 
-      {/* Le compteur de lancers dus ne disparaît jamais : il signale une fiche de
-          saisie ouverte, qui bloque le reste de la grille. */}
-      {pendingFreeThrows > 0 && (
-        <span className="shrink-0 rounded-full bg-warning-subtle px-2 py-1 text-xs text-warning">
-          LF {pendingFreeThrows}
-        </span>
-      )}
-
-      <SyncIndicator />
-    </header>
+      <span className="flex shrink-0 items-center gap-2">
+        {match.status === "finished" && (
+          <span className="rounded-full bg-raised px-2 py-1 text-xs font-medium text-muted">
+            Terminé
+          </span>
+        )}
+        {pendingFreeThrows > 0 && (
+          <span className="rounded-full bg-warning-subtle px-2 py-1 text-xs text-warning">
+            LF {pendingFreeThrows}
+          </span>
+        )}
+        <SyncIndicator />
+      </span>
+    </div>
   );
 }

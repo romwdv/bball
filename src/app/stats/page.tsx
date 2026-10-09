@@ -1,61 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { cumulativeToCsv } from "@/domain/export";
-import {
-  formatPercentage,
-  formatSplit,
-  percentage,
-  playerLabel,
-  type CumulativeStats,
-} from "@/domain/stats";
+import { formatPercentage, percentage } from "@/domain/stats";
+import type { CumulativeStats } from "@/domain/stats";
 import { CSV_MIME, downloadText } from "@/ui/download";
 import { Flash } from "@/ui/Flash";
-import {
-  COLUMNS,
-  sortAndFilter,
-  type SortKey,
-} from "@/features/stats/useCumulativeData";
 import { useCumulativeData } from "@/features/stats/useCumulativeData";
 import { useToastStore } from "@/features/stats/useToastStore";
+import { AppHeader } from "@/ui/AppHeader";
+import { BackIcon } from "@/ui/icons";
+import { StatCards, type StatCardData } from "@/ui/StatCard";
 
 /**
- * Stats cumulées de tous les matchs.
+ * Stats cumulées de tous les matchs (PLAN.md §12).
  *
- * Un tableau, pas des cartes : treize colonnes et une ligne par joueur, c'est la
- * forme qui se compare d'un coup d'œil et qui se trie. Les cartes ne
- * permettraient pas de répondre à « quel est mon pourcentage » sans les faire
- * défiler toutes.
- *
- * Le tri par colonne est l'interaction principale : le coach cherche une valeur,
- * pas une liste. Comme il n'y a plus qu'**un joueur** (PLAN.md §11), le champ de
- * filtre a disparu — un filtre sur une seule ligne ne peut rien exclure. Le tri
- * reste en place et reste inopérant sur une ligne : c'est la forme de la table
- * qui reste prête si un jour un deuxième joueur revient.
+ * La maquette remplace le tableau triable par une **grille de cartes** : le
+ * joueur est unique (PLAN.md §11), donc trier et filtrer des lignes n'a plus de
+ * sens — on lit les valeurs. La bascule « Totaux / Par match » reste.
  */
 
 export default function StatsPage() {
   const { stats, roster, matchCount, loading } = useCumulativeData();
-  const [sortKey, setSortKey] = useState<SortKey>("points");
-  const [descending, setDescending] = useState(true);
   const [averages, setAverages] = useState(false);
   const flash = useToastStore();
 
-  const { rows } = useMemo(
-    () => sortAndFilter(stats, roster, sortKey, descending, ""),
-    [stats, roster, sortKey, descending],
-  );
-
-  function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setDescending(!descending);
-      return;
-    }
-    // Un nouveau tri démarre toujours par le haut : on cherche le maximum.
-    setSortKey(key);
-    setDescending(true);
-  }
+  const entry = stats[0];
+  const rows = entry === undefined ? [] : buildRows(entry, averages);
 
   function exportCsv() {
     downloadText({
@@ -69,69 +41,68 @@ export default function StatsPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col overflow-y-auto px-4 pt-(--padding-safe-t) pb-(--padding-safe-b)">
-      <header className="flex items-center gap-2 py-4">
-        <Link
-          href="/"
-          aria-label="Retour à l'accueil"
-          className="min-h-tap-min min-w-tap-min rounded-lg border border-edge px-3 text-sm text-secondary"
-        >
-          ‹
-        </Link>
-        <h1 className="text-xl font-semibold">Stats cumulées</h1>
-        <span className="tabular ml-auto text-sm text-muted">
+    <main className="flex flex-1 flex-col overflow-y-auto pt-(--padding-safe-t) pb-(--padding-safe-b)">
+      <AppHeader />
+
+      <div className="flex items-center justify-between px-4 py-1">
+        <div className="flex items-center gap-1">
+          <Link
+            href="/"
+            aria-label="Retour à l'accueil"
+            className="grid min-h-tap-min min-w-tap-min place-items-center rounded-[10px] text-accent"
+          >
+            <BackIcon className="h-6 w-6" />
+          </Link>
+          <h1 className="font-display text-[19px] text-primary">
+            stats cumulées
+          </h1>
+        </div>
+        <span className="tabular font-label text-[13px] font-semibold text-muted">
           {matchCount} match{matchCount > 1 ? "s" : ""}
         </span>
-      </header>
-
-      <div className="mb-3 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={stats.length === 0}
-          className="min-h-tap-min rounded-xl border border-edge-strong bg-raised px-4 text-sm font-medium disabled:opacity-40"
-        >
-          CSV
-        </button>
-
-        <div className="flex overflow-hidden rounded-xl border border-edge">
-          <ModeButton
-            active={!averages}
-            onClick={() => setAverages(false)}
-            label="Totaux"
-          />
-          <ModeButton
-            active={averages}
-            onClick={() => setAverages(true)}
-            label="Par match"
-          />
-        </div>
       </div>
 
-      {loading && <p className="text-sm text-muted">Chargement…</p>}
+      <div className="flex flex-1 flex-col gap-4 px-4 pt-2">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={stats.length === 0}
+            className="min-h-tap-min rounded-[10px] bg-accent px-3 text-sm text-inverse disabled:opacity-40"
+          >
+            CSV
+          </button>
+          <div className="flex overflow-hidden rounded-[10px]">
+            <ModeButton
+              active={!averages}
+              onClick={() => setAverages(false)}
+              label="Totaux"
+            />
+            <ModeButton
+              active={averages}
+              onClick={() => setAverages(true)}
+              label="Par match"
+            />
+          </div>
+        </div>
 
-      {!loading && rows.length === 0 && (
-        <p className="mt-6 text-center text-sm text-muted">
-          Aucun match terminé : les statistiques apparaîtront après la première
-          clôture.
+        {loading && <p className="text-sm text-muted">Chargement…</p>}
+
+        {!loading && stats.length === 0 && (
+          <p className="mt-6 text-center text-sm text-muted">
+            Aucun match terminé : les statistiques apparaîtront après la
+            première clôture.
+          </p>
+        )}
+
+        {!loading && rows.length > 0 && <StatCards rows={rows} />}
+
+        <p className="text-xs text-muted">
+          {averages
+            ? "Moyennes par match joué, et non par match de l'équipe."
+            : "Totaux sur l'ensemble des matchs. Les actions annulées sont exclues."}
         </p>
-      )}
-
-      {rows.length > 0 && (
-        <StatsTable
-          rows={rows}
-          sortKey={sortKey}
-          descending={descending}
-          averages={averages}
-          onSort={toggleSort}
-        />
-      )}
-
-      <p className="mt-3 text-xs text-muted">
-        {averages
-          ? "Moyennes par match joué, et non par match de l'équipe."
-          : "Totaux sur l'ensemble des matchs. Les actions annulées sont exclues."}
-      </p>
+      </div>
 
       {/* Réutilise la bannière de la saisie plutôt qu'un second composant de
           toast : même durée, même style, un seul comportement à maintenir. */}
@@ -161,8 +132,8 @@ function ModeButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`min-h-tap-min flex-1 text-sm font-semibold ${
-        active ? "bg-accent text-inverse" : "bg-raised text-secondary"
+      className={`min-h-tap-min w-28 font-display text-[19px] ${
+        active ? "bg-accent text-inverse" : "bg-white text-primary"
       }`}
     >
       {label}
@@ -170,118 +141,52 @@ function ModeButton({
   );
 }
 
-// ---------------------------------------------------------------------------
-
-interface StatsTableProps {
-  rows: readonly {
-    entry: CumulativeStats;
-    player: import("@/data/schema").PlayerRow | undefined;
-  }[];
-  sortKey: SortKey;
-  descending: boolean;
-  averages: boolean;
-  onSort: (key: SortKey) => void;
-}
-
-function StatsTable({
-  rows,
-  sortKey,
-  descending,
-  averages,
-  onSort,
-}: StatsTableProps) {
-  return (
-    <div className="surface-card overflow-x-auto">
-      <table className="tabular w-full min-w-max text-left text-sm">
-        <thead>
-          <tr className="border-b border-edge">
-            {COLUMNS.map((column) => (
-              // `aria-sort` est sur le `th` et non sur le bouton : c'est la
-              // colonne entière qui est triée, et la règle d'accessibilité
-              // l'interdit sur un `button`.
-              <th
-                key={column.key}
-                scope="col"
-                aria-sort={
-                  sortKey === column.key
-                    ? descending
-                      ? "descending"
-                      : "ascending"
-                    : "none"
-                }
-                className="p-0 font-medium"
-              >
-                <button
-                  type="button"
-                  onClick={() => onSort(column.key)}
-                  title={column.title}
-                  aria-label={`${column.title}, ${sortKey === column.key && descending ? "décroissant" : "croissant"}`}
-                  className={`min-h-tap-min w-full px-2 py-2 text-xs ${
-                    sortKey === column.key ? "text-accent" : "text-muted"
-                  }`}
-                >
-                  {column.label}
-                  {sortKey === column.key && (descending ? " ▾" : " ▴")}
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ entry, player }) => (
-            <tr
-              key={entry.playerId}
-              className="border-b border-edge last:border-0"
-            >
-              <th
-                scope="row"
-                className="max-w-32 truncate px-2 py-2 font-medium"
-              >
-                {player === undefined ? "—" : playerLabel(player)}
-              </th>
-              <td className="px-2 py-2">{entry.matchesPlayed}</td>
-              <td className="px-2 py-2 font-semibold">
-                {number(averages ? entry.averages.points : entry.totals.points)}
-              </td>
-              <td className="px-2 py-2">
-                {split(entry.totals.fgm2, entry.totals.fga2)}
-              </td>
-              <td className="px-2 py-2">
-                {split(entry.totals.fgm3, entry.totals.fga3)}
-              </td>
-              <td className="px-2 py-2">
-                {split(entry.totals.ftm, entry.totals.fta)}
-              </td>
-              <td className="px-2 py-2">
-                {formatPercentage(
-                  percentage(
-                    entry.totals.fgm2 + entry.totals.fgm3,
-                    entry.totals.fga2 + entry.totals.fga3,
-                  ),
-                )}
-              </td>
-              <td className="px-2 py-2">{entry.totals.fouls}</td>
-              <td className="px-2 py-2">
-                {entry.totals.reboundsOffensive +
-                  entry.totals.reboundsDefensive}
-              </td>
-              <td className="px-2 py-2">{entry.totals.assists}</td>
-              <td className="px-2 py-2">{entry.totals.turnovers}</td>
-              <td className="px-2 py-2">{entry.totals.steals}</td>
-              <td className="px-2 py-2">{entry.totals.blocks}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function split(made: number, attempted: number): string {
-  return formatSplit(made, attempted, "") ?? "—";
-}
-
 /** Une décimale pour une moyenne, un entier pour un total. */
 function number(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/**
+ * Lignes de cartes, dans l'ordre de la maquette (PLAN.md §12) :
+ * Matchs/Points/% Tirs, %2PTS/%3PTS/%LF, PD/INT/BP/CTR, RB/RD/RO.
+ */
+function buildRows(
+  entry: CumulativeStats,
+  averages: boolean,
+): readonly (readonly StatCardData[])[] {
+  const totals = entry.totals;
+  const played = entry.matchesPlayed;
+  const per = (value: number) => (averages ? value / played : value);
+
+  const fg = percentage(totals.fgm2 + totals.fgm3, totals.fga2 + totals.fga3);
+  const two = percentage(totals.fgm2, totals.fga2);
+  const three = percentage(totals.fgm3, totals.fga3);
+  const ft = percentage(totals.ftm, totals.fta);
+
+  return [
+    [
+      { label: "Matchs", value: String(played) },
+      { label: "Points", value: number(per(totals.points)) },
+      { label: "% Tirs", value: formatPercentage(fg) },
+    ],
+    [
+      { label: "% 2PTS", value: formatPercentage(two) },
+      { label: "% 3PTS", value: formatPercentage(three) },
+      { label: "% LF", value: formatPercentage(ft) },
+    ],
+    [
+      { label: "PD", value: number(per(totals.assists)) },
+      { label: "INT", value: number(per(totals.steals)) },
+      { label: "BP", value: number(per(totals.turnovers)) },
+      { label: "CTR", value: number(per(totals.blocks)) },
+    ],
+    [
+      {
+        label: "RB",
+        value: number(per(totals.reboundsOffensive + totals.reboundsDefensive)),
+      },
+      { label: "RD", value: number(per(totals.reboundsDefensive)) },
+      { label: "RO", value: number(per(totals.reboundsOffensive)) },
+    ],
+  ];
 }

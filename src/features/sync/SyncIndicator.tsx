@@ -88,6 +88,17 @@ export function SyncIndicator({ variant = "chip" }: SyncIndicatorProps = {}) {
 
   const banner = variant === "banner";
 
+  // Point de couleur à gauche, comme dans la maquette : vert quand tout est
+  // synchronisé, orange hors-ligne, rouge en erreur.
+  const dot =
+    state === "error"
+      ? "bg-foul"
+      : state === "offline"
+        ? "bg-warning"
+        : state === "syncing" || pending > 0
+          ? "bg-accent"
+          : "bg-made";
+
   return (
     <button
       type="button"
@@ -100,13 +111,18 @@ export function SyncIndicator({ variant = "chip" }: SyncIndicatorProps = {}) {
       data-state={state}
       className={
         banner
-          ? `flex min-h-tap-min w-full items-center justify-between gap-2 rounded-xl border border-edge bg-raised px-4 py-2 text-left text-sm ${tone}`
-          : `tabular min-h-tap-min shrink-0 rounded-full px-2 text-xs ${tone}`
+          ? `flex min-h-tap-min w-full items-center justify-between gap-2 rounded-[10px] bg-white px-4 py-2 text-left text-sm ${tone}`
+          : `tabular flex min-h-tap-min shrink-0 items-center gap-1.5 font-label text-[13px] font-semibold ${tone}`
       }
     >
-      <span className={banner ? "" : "tabular"}>{label}</span>
+      <span className="flex items-center gap-1.5">
+        {!banner && (
+          <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+        )}
+        <span className="tabular">{label}</span>
+      </span>
       {banner && pending > 0 && (
-        // LeRetry manuel est ce que le coach fera en cas d'échec réseau : il doit
+        // Le retry manuel est ce que le coach fera en cas d'échec réseau : il doit
         // être atteignable sans deviner où il est.
         <span className="shrink-0 text-xs text-muted">Réessayer</span>
       )}

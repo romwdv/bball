@@ -1,55 +1,71 @@
 @import "tailwindcss";
 
-/*
- * Thème dark uniquement, et c'est volontaire : l'app est utilisée sur un téléphone
- * posé sur la table de marque en gymnase, souvent en lumière rasante. Le dark natif
- * évite l'éblouissement et les contrastes sont calibrés pour cet usage.
+/* ---------------------------------------------------------------------------
+ * Thème clair — refonte design d'après la maquette Penpot (PLAN.md §12).
  *
- * Pas de police Google : on utilise la pile système pour ne dépendre d'aucun
- * téléchargement réseau au premier lancement (crucial pour une PWA hors-ligne).
+ * Les valeurs viennent des boards Penpot : fond #e8e8e8, cartes #e3e3e3, accent
+ * orange #df6744, logo #ea5234. Deux ajustements volontaires, tous deux motivés
+ * par l'audit AA automatisé :
+ *
+ *  - `--text-muted` est `#646464` et non le `#aaaaaa` de la maquette : le gris
+ *    de la maquette tient ~1,5:1 sur le fond, loin du seuil de 4,5:1 exigé pour
+ *    du texte courant. Même teinte, hiérarchie préservée, AA respecté.
+ *  - L'accent, le rouge faute et le warning sont foncés (`#c94f2b`, `#cf3c3c`,
+ *    `#8a5a06`) : leurs versions maquette (`#df6744`, `#ec5151`, `#b97708`) ne
+ *    tenaient que ~3,5:1 avec le texte blanc, sous le seuil AA.
+ *
+ * Quatre polices auto-hébergées (@fontsource, sous-ensembles latin) — la pile
+ * système ne transportait plus l'identité de la maquette. Les fichiers woff2
+ * sont dans le bundle, donc servis hors-ligne par le pré-cache comme le reste.
+ * `font-display: swap` : en attendant le woff2, le texte s'affiche en repli.
+ * ---------------------------------------------------------------------------
  */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* Surfaces */
-  --surface-base: #0b0f14;
-  --surface-raised: #151b23;
-  --surface-overlay: #1e2632;
-  --surface-sunken: #070a0e;
+  --surface-base: #e8e8e8;
+  --surface-raised: #e3e3e3;
+  --surface-white: #ffffff;
+  --surface-overlay: #111111;
 
   /* Texte */
-  --text-primary: #f2f5f9;
-  --text-secondary: #a9b4c4;
-  /* Texte tertiaire : dates, aides, compteurs.
+  --text-primary: #111111;
+  --text-secondary: #444444;
+  /* Muted : cf. note en tête de fichier — #646464, pas #aaaaaa. */
+  --text-muted: #646464;
+  --text-inverse: #ffffff;
+
+  /* Accent (orange maquette).
    *
-   * La valeur est le résultat d'un audit WCAG AA **mesuré**, pas d'un calcul à
-   * l'œil : `#6b7688` ne tenait que 3,77:1 sur les cartes (`--surface-raised`),
-   * sous le seuil de 4,5:1 exigé pour du texte courant. Claircie vers `#7b889c`,
-   * elle atteint 4,82:1 sur une carte et 5,35:1 sur le fond — avec la même teinte,
-   * donc sans casser la hiérarchie visuelle. Vérifié par `tests/e2e/contrast.spec.ts`.
+   * `#df6744` de la maquette ne tient que 3,41:1 avec le blanc, sous le seuil
+   * AA de 4,5:1 pour du texte courant. `#c94f2b` garde la même teinte et
+   * atteint 4,53:1 — c'est le prix d'un audit AA passé.
    */
-  --text-muted: #7b889c;
-  --text-inverse: #0b0f14;
+  --accent: #c94f2b;
+  --accent-hover: #b84424;
+  --accent-strong: #ea5234;
+  --accent-subtle: #f6e3da;
 
-  /* Accent */
-  --accent: #3d8bfd;
-  --accent-hover: #5a9dff;
-  --accent-subtle: #16243d;
-
-  /* Sémantique — le vert/m rouge sont le vocabulaire de la saisie */
-  --made: #22c55e;
-  --made-subtle: #10291c;
-  --missed: #64748b;
-  --missed-subtle: #1b212b;
-  --foul: #ef4444;
-  --foul-subtle: #2b1414;
-  --warning: #f59e0b;
-  --warning-subtle: #2b1f08;
+  /* Sémantique — le vocabulaire de la saisie */
+  --made: #14ae5c;
+  --made-subtle: #d8f0e2;
+  --missed: #8a8a8a;
+  --missed-subtle: #ececec;
+  /* `#ec5151` de la maquette ne tient que 3,58:1 avec le blanc. `#cf3c3c`
+   * atteint 4,81:1. */
+  --foul: #cf3c3c;
+  --foul-subtle: #fbe0e0;
+  /* `#b97708` ne tient que 3,42:1 sur le fond. `#8a5a06` atteint 5,47:1. */
+  --warning: #8a5a06;
+  --warning-subtle: #f7e9cc;
+  --dot-filled: #f0980b;
+  --dot-empty: #b3b3b3;
 
   /* Bordures */
-  --border: #232c38;
-  --border-strong: #33404f;
+  --border: #cfcfcf;
+  --border-strong: #aaaaaa;
 
   /* Cible tactile minimale : 44px (recommandation Material) */
   --tap-target-min: 44px;
@@ -64,21 +80,10 @@
 }
 
 @theme inline {
-  /*
-   * ⚠️ `--color-base` rend la classe utilitaire **`text-base` ambiguë** : Tailwind
-   * v4 résout `text-*` d'abord parmi les couleurs, donc `text-base` produit
-   * `color: var(--color-base)` et **aucune** `font-size`. Un texte qui n'a pas
-   * d'autre classe de couleur devient alors noir sur fond sombre, sans erreur de
-   * build — c'est ce que l'audit de contraste AA a trouvé sur `/new-match`.
-   *
-   * Pour une taille de police, utiliser `text-sm` / `text-lg`, ou une classe
-   * arbitraire `text-[1rem]`. Chaque fois qu'une couleur `text-base` est écrite
-   * sans couleur explicite à côté, c'est presque toujours une erreur.
-   */
   --color-base: var(--surface-base);
   --color-raised: var(--surface-raised);
+  --color-white: var(--surface-white);
   --color-overlay: var(--surface-overlay);
-  --color-sunken: var(--surface-sunken);
 
   --color-primary: var(--text-primary);
   --color-secondary: var(--text-secondary);
@@ -87,6 +92,7 @@
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-subtle: var(--accent-subtle);
 
   --color-made: var(--made);
@@ -97,6 +103,8 @@
   --color-foul-subtle: var(--foul-subtle);
   --color-warning: var(--warning);
   --color-warning-subtle: var(--warning-subtle);
+  --color-dot-filled: var(--dot-filled);
+  --color-dot-empty: var(--dot-empty);
 
   --color-edge: var(--border);
   --color-edge-strong: var(--border-strong);
@@ -109,21 +117,25 @@
   --padding-safe-b: var(--safe-bottom);
   --padding-safe-l: var(--safe-left);
 
-  --font-sans:
-    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
+  /*
+   * ⚠️ `--color-base` rend la classe utilitaire **`text-base` ambiguë** : Tailwind
+   * v4 résout `text-*` d'abord parmi les couleurs, donc `text-base` produit
+   * `color: var(--color-base)` et **aucune** `font-size`. Pour une taille de
+   * police, utiliser `text-sm` / `text-lg`, ou une classe arbitraire
+   * `text-[1rem]`.
+   */
+  --font-brand: "Alexandria", sans-serif;
+  --font-display: "Encode Sans Expanded", sans-serif;
+  --font-label: "Abel", sans-serif;
+  --font-body: "Source Sans 3", system-ui, sans-serif;
+  --font-sans: var(--font-body);
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 html {
   background-color: var(--surface-base);
-  /*
-   * `dvh` plutôt que `vh` : sur mobile, `vh` ignore la barre d'URL et déborde.
-   * Indispensable pour un écran de saisie qui ne doit jamais pouvoir défiler.
-   */
   height: 100%;
-  /* Empêche l'agrandissement automatique du texte en rotation sur iOS. */
   -webkit-text-size-adjust: 100%;
 }
 
@@ -132,24 +144,18 @@ body {
   background-color: var(--surface-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  /* L'app se pilote à une main : on neutralise la sélection accidentelle du texte. */
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
-  /* Aucun rebond ni zoom sur les actions de saisie. */
   overscroll-behavior: none;
 }
 
-/*
- * Accessibilité : retirer les contours au clic n'est acceptable que si un indicateur
- * équivalent reste visible au clavier. On ne les supprime donc pas globalement.
- */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* Zones tactiles scrollables (carrousel joueurs, bandeau de combos). */
+/* Zones tactiles scrollables (bandeaux de combos et stats rapides). */
 @utility scroll-x-touch {
   overflow-x: auto;
   scrollbar-width: none;
@@ -162,7 +168,7 @@ body {
 }
 
 @utility surface-card {
-  background-color: var(--surface-raised);
+  background-color: var(--surface-white);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
 }

@@ -32,7 +32,7 @@ test.describe("cibles tactiles", () => {
   }) => {
     await signIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
@@ -68,7 +68,7 @@ test.describe("cibles tactiles", () => {
   test("la grille d'actions respecte 88 px", async ({ page }) => {
     await signIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Nouveau match" }).click();
+    await page.getByRole("button", { name: "Ajouter un match" }).click();
     await page.getByLabel("Adversaire").fill("BC Nuit");
     await page.getByRole("button", { name: "Commencer la saisie" }).click();
     await expect(page.getByTestId("score")).toBeVisible();

@@ -1,32 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Action, Match, Player, Quarter } from "@/domain/types";
-import { QUARTERS, FOUL_LIMIT } from "@/domain/types";
-import {
-  aggregateFor,
-  formatSplit,
-  formatPercentage,
-  percentage,
-  teamTotals,
-  pointsByQuarter,
-  playerLabel,
-} from "@/domain/stats";
+import { QUARTERS } from "@/domain/types";
+import { aggregateFor, formatPercentage, percentage } from "@/domain/stats";
 import { CSV_MIME, JSON_MIME, downloadText } from "@/ui/download";
 import { matchFilename, matchToCsv, matchToJson } from "@/domain/export";
+import { StatCards, type StatCardData } from "@/ui/StatCard";
 
 /**
- * Feuille de match : le résultat, lisible.
+ * Feuille de match (PLAN.md §12).
  *
- * Réutilisable par la phase 5 pour le détail d'un match historique — c'est pour
- * ça qu'elle prend les données en props et ne les charge pas elle-même. Un
- * composant qui lit la base n'est pas réutilisable.
+ * La maquette « stats match » remplace le tableau par une **grille de cartes**
+ * : une sélection de période (Tout / Q1–Q4) et les statistiques du joueur en
+ * cartes, suivies des boutons d'export.
  *
- * Trois informations, dans l'ordre où le coach en a besoin après le coup de
- * sifflet final : le score par période (qui a pris l'avance quand), puis le
- * pourcentage de réussite de l'équipe (le seul chiffre qu'on commente), puis la
- * ligne par joueur. Les pourcentages sont en tête parce qu'ils sont la
- * conversation du vestiaire ; la ligne par joueur en dessous, pour le détail.
+ * Réutilisable par l'écran de saisie terminé et par le détail de l'historique —
+ * c'est pour ça qu'elle prend les données en props et ne les charge pas elle-même.
+ *
+ * Les valeurs sont celles du **premier joueur du roster** : l'application ne
+ * suit qu'un seul joueur (PLAN.md §11).
  */
 
 export interface MatchSheetProps {
@@ -37,10 +30,8 @@ export interface MatchSheetProps {
   /**
    * Période à consulter, ou `undefined` pour le match entier.
    *
-   * Le score par période reste calculé sur le match complet — c'est une
-   * information toujours vraie — tandis que les pourcentages et les lignes par
-   * joueur portent sur la période. Filtrer les actions en amont donnerait un
-   * bandeau de score à zéro partout ailleurs, ce qui serait un mensonge.
+   * Le score reste calculé sur le match complet quand « Tout » est sélectionné ;
+   * en sélectionnant une période, tous les compteurs portent sur elle.
    */
   quarter?: Quarter;
 }
@@ -51,205 +42,140 @@ export function MatchSheet({
   actions,
   quarter,
 }: MatchSheetProps) {
-  const quarters = useMemo(() => pointsByQuarter(actions, QUARTERS), [actions]);
-  const total = quarters.reduce((sum, entry) => sum + entry.points, 0);
+  const [period, setPeriod] = useState<Quarter | undefined>(quarter);
 
-  // Les lignes par joueur et les pourcentages suivent la période consultée.
   const scope = useMemo(
     () =>
-      quarter === undefined
+      period === undefined
         ? actions
-        : actions.filter((action) => action.quarter === quarter),
-    [actions, quarter],
+        : actions.filter((action) => action.quarter === period),
+    [actions, period],
   );
 
-  const rows = useMemo(
-    () =>
-      players.map((player) => ({
-        player,
-        stats: aggregateFor(scope, player.id),
-      })),
-    [players, scope],
-  );
+  const player = players[0];
+  const stats =
+    player === undefined ? undefined : aggregateFor(scope, player.id);
+
+  const rows = stats === undefined ? [] : buildRows(stats);
 
   return (
     <section aria-label="Feuille de match" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">vs {match.opponentName}</h2>
-        <p className="tabular text-sm text-secondary">
-          {match.date} · {match.status === "finished" ? "Terminé" : "En cours"}
-        </p>
-      </div>
+      <PeriodFilter value={period} onChange={setPeriod} />
 
-      <ScoreByQuarter quarters={quarters} total={total} selected={quarter} />
-      <TeamShooting actions={scope} />
-      {quarter !== undefined && (
-        <p className="text-xs text-muted">
-          Lignes et pourcentages sur la période Q{quarter} uniquement.
-        </p>
+      {stats === undefined ? (
+        <p className="text-sm text-muted">Aucun joueur dans ce match.</p>
+      ) : (
+        <StatCards rows={rows} />
       )}
-      <PlayerRows rows={rows} />
+
       <ExportButtons match={match} players={players} actions={actions} />
     </section>
   );
 }
 
-interface ScoreByQuarterProps {
-  quarters: readonly { quarter: number; points: number }[];
-  total: number;
-  selected: Quarter | undefined;
+// ---------------------------------------------------------------------------
+
+/**
+ * Lignes de cartes, dans l'ordre exact de la maquette « stats match »
+ * (PLAN.md §12) : Points/% Tirs, %2PTS/%3PTS/%LF, PD/INT/BP/CTR, RB/RD/RO.
+ */
+function buildRows(
+  stats: ReturnType<typeof aggregateFor>,
+): readonly (readonly StatCardData[])[] {
+  const fg = percentage(stats.fgm2 + stats.fgm3, stats.fga2 + stats.fga3);
+  const two = percentage(stats.fgm2, stats.fga2);
+  const three = percentage(stats.fgm3, stats.fga3);
+  const ft = percentage(stats.ftm, stats.fta);
+
+  return [
+    [
+      { label: "Points", value: String(stats.points) },
+      { label: "% Tirs", value: formatPercentage(fg) },
+    ],
+    [
+      { label: "% 2PTS", value: formatPercentage(two) },
+      { label: "% 3PTS", value: formatPercentage(three) },
+      { label: "% LF", value: formatPercentage(ft) },
+    ],
+    [
+      { label: "PD", value: String(stats.assists) },
+      { label: "INT", value: String(stats.steals) },
+      { label: "BP", value: String(stats.turnovers) },
+      { label: "CTR", value: String(stats.blocks) },
+    ],
+    [
+      {
+        label: "RB",
+        value: String(stats.reboundsOffensive + stats.reboundsDefensive),
+      },
+      { label: "RD", value: String(stats.reboundsDefensive) },
+      { label: "RO", value: String(stats.reboundsOffensive) },
+    ],
+  ];
 }
 
 /**
- * Score par période, avec une case vide rendue à 0 : une période à 0 est une
- * information. La période consultée est mise en avant, pour que la lecture ne
- * demande pas de recounts les cases.
+ * Sélecteur de période de la feuille.
+ *
+ * Un bouton par période plus « Tout ». Le sélecteur de l'écran de saisie n'a pas
+ * sa place ici : c'est un autre écran, et un sélecteur qui change la période de
+ * saisie depuis un match terminé n'aurait aucun sens.
  */
-function ScoreByQuarter({ quarters, total, selected }: ScoreByQuarterProps) {
+function PeriodFilter({
+  value,
+  onChange,
+}: {
+  value: Quarter | undefined;
+  onChange: (next: Quarter | undefined) => void;
+}) {
   return (
-    // Étiqueté pour le lecteur d'écran : « le score de la période Q2 » se
-    // lit sans compter les cases.
     <div
-      aria-label="Score par période"
-      className="surface-card flex items-center gap-1 p-3"
+      role="tablist"
+      aria-label="Période consultée"
+      className="flex items-center gap-1.5"
     >
-      <div className="tabular flex flex-1 flex-col items-center gap-1">
-        <span className="text-3xl font-bold">{total}</span>
-        <span className="text-xs text-muted">Total</span>
-      </div>
-      {quarters.map(({ quarter, points }) => (
-        <div
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === undefined}
+        onClick={() => onChange(undefined)}
+        className={`min-h-tap-min flex-1 rounded-[10px] font-display text-[19px] font-normal ${
+          value === undefined
+            ? "bg-accent text-inverse"
+            : "bg-white text-primary"
+        }`}
+      >
+        Tout
+      </button>
+      {QUARTERS.map((quarter) => (
+        <button
           key={quarter}
-          aria-current={quarter === selected ? "true" : undefined}
-          className={`tabular flex flex-1 flex-col items-center gap-1 rounded-lg ${
-            quarter === selected ? "bg-accent-subtle" : ""
+          type="button"
+          role="tab"
+          aria-selected={value === quarter}
+          onClick={() => onChange(quarter as Quarter)}
+          className={`tabular min-h-tap-min flex-1 rounded-[10px] font-brand text-[19px] ${
+            value === quarter
+              ? "bg-accent text-inverse"
+              : "bg-white text-primary"
           }`}
         >
-          <span
-            className={`text-lg font-semibold ${points === 0 ? "text-muted" : ""}`}
-          >
-            {points}
-          </span>
-          <span className="text-xs text-muted">Q{quarter}</span>
-        </div>
+          Q{quarter}
+        </button>
       ))}
     </div>
   );
 }
 
-/**
- * Pourcentages de l'équipe, la conversation du vestiaire.
- *
- * `teamTotals` et pas `aggregateFor(actions, "team")` : cette dernière filtre par
- * `playerId`, donc une équipe fictive valait tout à zéro — un bug qui ne se voit
- * qu'au premier panier marqué.
- */
-function TeamShooting({ actions }: { actions: readonly Action[] }) {
-  const team = useMemo(() => teamTotals(actions), [actions]);
-
-  // Le pourcentage global pondère 2 pts et 3 pts dans le même ratio : c'est la
-  // convention du basket (FG%), et non la moyenne des deux colonnes.
-  const fg = percentage(team.fgm2 + team.fgm3, team.fga2 + team.fga3);
-  const two = percentage(team.fgm2, team.fga2);
-  const three = percentage(team.fgm3, team.fga3);
-  const ft = percentage(team.ftm, team.fta);
-
-  return (
-    <div
-      aria-label="Pourcentages de l'équipe"
-      className="surface-card grid grid-cols-4 gap-2 p-3 text-center"
-    >
-      <Stat label="Tirs" value={formatPercentage(fg)} />
-      <Stat label="2 pts" value={formatPercentage(two)} />
-      <Stat label="3 pts" value={formatPercentage(three)} />
-      <Stat label="LF" value={formatPercentage(ft)} />
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="tabular text-lg font-semibold">{value}</span>
-      <span className="text-xs text-muted">{label}</span>
-    </div>
-  );
-}
-
-interface PlayerRowsProps {
-  rows: readonly { player: Player; stats: ReturnType<typeof aggregateFor> }[];
-}
-
-/** Une ligne par joueur, dans l'ordre du roster. */
-function PlayerRows({ rows }: PlayerRowsProps) {
-  if (rows.length === 0) {
-    return <p className="text-sm text-muted">Aucun joueur dans ce match.</p>;
-  }
-
-  return (
-    <div className="surface-card overflow-x-auto">
-      <table className="tabular w-full min-w-max text-left text-sm">
-        <thead>
-          <tr className="border-b border-edge text-xs text-muted">
-            <th className="px-3 py-2 font-medium">Joueur</th>
-            <th className="px-2 py-2 font-medium">Pts</th>
-            <th className="px-2 py-2 font-medium">2P</th>
-            <th className="px-2 py-2 font-medium">3P</th>
-            <th className="px-2 py-2 font-medium">LF</th>
-            <th className="px-2 py-2 font-medium">F</th>
-            <th className="px-2 py-2 font-medium">R</th>
-            <th className="px-2 py-2 font-medium">P</th>
-            <th className="px-2 py-2 font-medium">PD</th>
-            <th className="px-2 py-2 font-medium">CT</th>
-            <th className="px-2 py-2 font-medium">IC</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ player, stats }) => (
-            <tr key={player.id} className="border-b border-edge last:border-0">
-              <td className="px-3 py-2 font-medium">
-                <span className="tabular text-muted">
-                  {player.number ?? "—"}
-                </span>{" "}
-                {playerLabel(player)}
-              </td>
-              <td className="px-2 py-2 font-semibold">{stats.points}</td>
-              <td className="px-2 py-2">
-                {formatSplit(stats.fgm2, stats.fga2, "") ?? "—"}
-              </td>
-              <td className="px-2 py-2">
-                {formatSplit(stats.fgm3, stats.fga3, "") ?? "—"}
-              </td>
-              <td className="px-2 py-2">
-                {formatSplit(stats.ftm, stats.fta, "") ?? "—"}
-              </td>
-              <td
-                className={`px-2 py-2 ${stats.fouls >= FOUL_LIMIT ? "text-foul" : ""}`}
-              >
-                {stats.fouls}
-              </td>
-              <td className="px-2 py-2">
-                {stats.reboundsOffensive + stats.reboundsDefensive}
-              </td>
-              <td className="px-2 py-2">{stats.assists}</td>
-              <td className="px-2 py-2">{stats.turnovers}</td>
-              <td className="px-2 py-2">{stats.steals}</td>
-              <td className="px-2 py-2">{stats.blocks}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-interface ExportButtonsProps {
+function ExportButtons({
+  match,
+  players,
+  actions,
+}: {
   match: Match;
   players: readonly Player[];
   actions: readonly Action[];
-}
-
-function ExportButtons({ match, players, actions }: ExportButtonsProps) {
+}) {
   return (
     <div className="grid grid-cols-2 gap-2">
       <button
@@ -261,9 +187,9 @@ function ExportButtons({ match, players, actions }: ExportButtonsProps) {
             mime: CSV_MIME,
           })
         }
-        className="min-h-tap-min rounded-xl border border-edge-strong bg-raised font-medium"
+        className="min-h-tap-min rounded-[10px] bg-accent text-sm text-inverse"
       >
-        Exporter CSV
+        Exporter en CSV
       </button>
       <button
         type="button"
@@ -274,9 +200,9 @@ function ExportButtons({ match, players, actions }: ExportButtonsProps) {
             mime: JSON_MIME,
           })
         }
-        className="min-h-tap-min rounded-xl border border-edge-strong bg-raised font-medium"
+        className="min-h-tap-min rounded-[10px] bg-accent text-sm text-inverse"
       >
-        Exporter JSON
+        Exporter en JSON
       </button>
     </div>
   );

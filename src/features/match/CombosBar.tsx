@@ -185,10 +185,8 @@ function ComboButton({
       type="button"
       disabled={disabled}
       aria-label={definition.name}
-      className={`min-h-tap-min shrink-0 rounded-lg border px-4 text-sm font-semibold transition-colors ${
-        isPressed
-          ? "border-accent bg-accent-subtle"
-          : "border-edge-strong bg-raised"
+      className={`min-h-tap-min shrink-0 rounded-[10px] px-4 font-display text-[19px] font-light text-primary transition-colors ${
+        isPressed ? "bg-accent-subtle" : "bg-white"
       } ${disabled ? "opacity-40" : ""}`}
       style={{ touchAction: "none" }}
       {...handlers}
