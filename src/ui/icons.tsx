@@ -15,14 +15,19 @@ import type { SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-/** Ballon de basket — le logo (maquette `streamline-plump:ball-solid`). */
+/** Ballon de basket — le logo. */
 export function BallIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <path
-        fill="currentColor"
-        d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.93 9H14.6c.1-1.6.7-3 1.7-4.2A8.05 8.05 0 0 1 19.93 11ZM12 4c1.5 0 2.7.5 3.6 1.3-1 1.2-1.7 2.8-1.8 4.7H10.2c-.1-1.9-.8-3.5-1.8-4.7C9.3 4.5 10.5 4 12 4Zm-5.3 2.8A9.9 9.9 0 0 1 8.4 11H4.07a8.05 8.05 0 0 1 2.63-4.2ZM4 12h4.4c0 2-.6 3.7-1.6 5A8 8 0 0 1 4 12Zm2 6.2c.9-1.2 1.6-2.9 1.8-4.7h4.4c.1 1.8.8 3.5 1.8 4.7A7.96 7.96 0 0 1 6 18.2ZM12 20c-1.5 0-2.7-.5-3.6-1.3 1-1.2 1.7-2.8 1.8-4.7h3.6c.1 1.9.8 3.5 1.8 4.7-.9.8-2.1 1.3-3.6 1.3Zm5.3-2.8c-1-1.2-1.7-2.9-1.8-4.7H20a8.06 8.06 0 0 1-2.7 4.7Z"
-      />
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" {...props}>
+      <g
+        stroke="currentColor"
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 24c0 11.598 9.402 21 21 21s21-9.402 21-21S35.598 3 24 3S3 12.402 3 24" />
+        <path d="M44.975 25.024c-10.782.518-19.433 9.169-19.95 19.951M38.75 9.25l-29.5 29.5m0-29.5l29.5 29.5M22.974 3.024c-.52 10.782-9.168 19.43-19.95 19.95" />
+      </g>
     </svg>
   );
 }
@@ -41,11 +46,11 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
-/** Corbeille dans un cercle — suppression d'un match (maquette `mdi:delete-circle`). */
+/** Corbeille dans un cercle — suppression d'un match. */
 export function DeleteIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4 6.5v1.2h-.8l-.7 8.8c-.05.8-.6 1.3-1.5 1.3H11c-.9 0-1.45-.5-1.5-1.3l-.7-8.8H8V8.5h8Zm-4.9 2.2h1.8l.1 7h-1.9l.1-7Zm3.4 0h1.8l-.1 7h-1.8l.1-7Z" />
+      <path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12S6.47 2 12 2m5 5h-2.5l-1-1h-3l-1 1H7v2h10zM9 18h6a1 1 0 0 0 1-1v-7H8v7a1 1 0 0 0 1 1" />
     </svg>
   );
 }
@@ -87,14 +92,11 @@ export function UndoIcon(props: IconProps) {
   );
 }
 
-/** Historique — nav bas de l'accueil (maquette `material-symbols-light:history`). */
+/** Historique — nav bas de l'accueil. */
 export function HistoryIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M12 3a9 9 0 0 0-7.9 4.6L2.4 6v5h5l-2-2A7 7 0 1 1 5 17l-1.6 1.3A9 9 0 1 0 12 3Zm0 5v5l3.4 2 .9-1.5L13 12.5V8h-1Z"
-        fill="currentColor"
-      />
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M12 21q-3.45 0-6.012-2.287T3.05 13H5.1q.35 2.6 2.313 4.3T12 19q2.925 0 4.963-2.037T19 12t-2.037-4.962T12 5q-1.725 0-3.225.8T6.25 8H9v2H3V4h2v2.35q1.275-1.6 3.113-2.475T12 3q1.875 0 3.513.713t2.85 1.924t1.925 2.85T21 12t-.712 3.513t-1.925 2.85t-2.85 1.925T12 21m2.8-4.8L11 12.4V7h2v4.6l3.2 3.2z" />
     </svg>
   );
 }
