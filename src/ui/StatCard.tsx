@@ -18,6 +18,8 @@
 export interface StatCardData {
   label: string;
   value: string;
+  /** Précision affichée sous la valeur (ex. `7/12`). Absente = rien. */
+  detail?: string;
 }
 
 const GRID_COLUMNS: Record<number, string> = {
@@ -45,6 +47,11 @@ export function StatCards({
             >
               <span className="text-sm text-muted">{card.label}</span>
               <span className="tabular text-2xl text-primary">{card.value}</span>
+              {card.detail !== undefined && (
+                <span className="tabular text-sm text-muted">
+                  {card.detail}
+                </span>
+              )}
             </div>
           ))}
         </div>

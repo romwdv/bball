@@ -163,6 +163,10 @@ function buildRows(
   const three = percentage(totals.fgm3, totals.fga3);
   const ft = percentage(totals.ftm, totals.fta);
 
+  /** `réussis/tentés`, pour accompagner le pourcentage. */
+  const made = (m: number, a: number) =>
+    `${number(per(m))}/${number(per(a))}`;
+
   return [
     [
       { label: "Matchs", value: String(played) },
@@ -170,9 +174,21 @@ function buildRows(
       { label: "% Tirs", value: formatPercentage(fg) },
     ],
     [
-      { label: "% 2PTS", value: formatPercentage(two) },
-      { label: "% 3PTS", value: formatPercentage(three) },
-      { label: "% LF", value: formatPercentage(ft) },
+      {
+        label: "% 2PTS",
+        value: formatPercentage(two),
+        detail: made(totals.fgm2, totals.fga2),
+      },
+      {
+        label: "% 3PTS",
+        value: formatPercentage(three),
+        detail: made(totals.fgm3, totals.fga3),
+      },
+      {
+        label: "% LF",
+        value: formatPercentage(ft),
+        detail: made(totals.ftm, totals.fta),
+      },
     ],
     [
       { label: "PD", value: number(per(totals.assists)) },
