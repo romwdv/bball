@@ -20,6 +20,13 @@ export interface MatchCardProps {
   /** Où mène la carte (saisie ou détail). */
   href: string;
   actionCount: number;
+  /**
+   * Évaluation du match (`undefined` = pas de pastille).
+   *
+   * Optionnelle parce qu'elle n'a de sens que sur un match terminé : l'accueil,
+   * qui affiche aussi des matchs en cours, ne la passe pas.
+   */
+  rating?: number;
   onDeleted: () => void;
 }
 
@@ -29,10 +36,24 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
   finished: "Match terminé",
 };
 
+/**
+ * Teinte de la pastille d'évaluation.
+ *
+ * Le vert et le rouge sont déjà le vocabulaire de la saisie (`made` / `foul`) :
+ * réutilisés tels quels, l'évaluation se lit sans légende. Une évaluation nulle
+ * reste neutre — un match « moyen » n'est pas un match à signalement.
+ */
+function ratingClass(value: number): string {
+  if (value > 0) return "bg-made-subtle text-made";
+  if (value < 0) return "bg-foul-subtle text-foul";
+  return "bg-missed-subtle text-muted";
+}
+
 export function MatchCard({
   match,
   href,
   actionCount,
+  rating,
   onDeleted,
 }: MatchCardProps) {
   return (
@@ -53,6 +74,15 @@ export function MatchCard({
             {formatDate(match.date)}
           </span>
         </span>
+        {rating !== undefined && (
+          <span
+            className={`tabular ml-3 shrink-0 rounded-full px-2.5 py-1 font-label text-[13px] font-semibold ${ratingClass(rating)}`}
+            aria-label={`Évaluation du match : ${rating > 0 ? "+" : ""}${rating}`}
+          >
+            {rating > 0 ? "+" : ""}
+            {rating}
+          </span>
+        )}
       </Link>
       <DeleteMatchButton
         match={match}

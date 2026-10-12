@@ -26,6 +26,8 @@ import {
   filterActions,
   fgPercentage,
   formatPercentage,
+  matchRating,
+  rating,
   formatSplit,
   freeThrowPercentage,
   percentage,
@@ -972,6 +974,64 @@ describe("aides du domaine", () => {
     const sum = addDeltas(a, b);
     expect(sum.points).toBe(3);
     expect(a.points).toBe(0);
+  });
+});
+
+describe("évaluation", () => {
+  it("compte chaque action positive pour un point", () => {
+    const delta = addDeltas(
+      emptyDelta(),
+      Object.assign(emptyDelta(), {
+        points: 5,
+        reboundsOffensive: 1,
+        reboundsDefensive: 1,
+        assists: 1,
+        steals: 1,
+        blocks: 1,
+      }),
+    );
+    expect(rating(delta)).toBe(10);
+  });
+
+  it("retranche une balle perdue", () => {
+    const delta = Object.assign(emptyDelta(), { points: 3, turnovers: 2 });
+    expect(rating(delta)).toBe(1);
+  });
+
+  it("ne retranche que la différence entre tirs réussis et manqués", () => {
+    const delta = Object.assign(emptyDelta(), {
+      fgm2: 3,
+      fga2: 5,
+      fgm3: 1,
+      fga3: 2,
+    });
+    expect(rating(delta)).toBe(-3);
+  });
+
+  it("ne retranche que la différence entre LF réussis et manqués", () => {
+    const delta = Object.assign(emptyDelta(), {
+      ftm: 2,
+      fta: 5,
+      points: 2,
+    });
+    expect(rating(delta)).toBe(-1);
+  });
+
+  it("un joueur qui ne rate jamais ne perd rien sur ces postes", () => {
+    const delta = Object.assign(emptyDelta(), {
+      fgm2: 4,
+      fga2: 4,
+      ftm: 4,
+      fta: 4,
+      points: 8,
+    });
+    expect(rating(delta)).toBe(8);
+  });
+
+  it("évalue l'équipe d'un seul match", () => {
+    const actions = [makeAction({ value: 2, made: true })];
+    expect(matchRating(actions, "m1")).toBe(2);
+    expect(matchRating(actions, "m2")).toBe(0);
   });
 });
 

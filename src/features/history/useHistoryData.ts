@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { repos } from "@/data";
 import type { MatchRow, PlayerRow } from "@/data/schema";
+import { matchRating } from "@/domain/stats";
 import { useAsyncData } from "@/ui/useAsyncData";
 
 /**
@@ -37,6 +38,15 @@ export interface HistoryData {
    * saison.
    */
   actionCounts: ReadonlyMap<string, number>;
+  /**
+   * Évaluation de l'équipe par match, indexée par `matchId`.
+   *
+   * Présente uniquement pour les matchs terminés : une évaluation de match en
+   * cours changerait sous les yeux du coach, et une pastille qui bouge est une
+   * pastille qu'on ne lit plus. Calculée dans la même passe que les compteurs,
+   * à partir des mêmes actions déjà chargées — aucune requête supplémentaire.
+   */
+  ratings: ReadonlyMap<string, number>;
 }
 
 /**
@@ -76,6 +86,13 @@ export function useHistoryData(revision = 0): HistoryData & {
       );
     }
 
+    const finishedIds = matches
+      .filter((match) => match.status === "finished")
+      .map((match) => match.id);
+    const ratings = new Map(
+      finishedIds.map((matchId) => [matchId, matchRating(actions, matchId)]),
+    );
+
     return {
       matches,
       finished: matches.filter((match) => match.status === "finished"),
@@ -85,6 +102,7 @@ export function useHistoryData(revision = 0): HistoryData & {
       // puisqu'elles sont lues sur les actions présentes.
       matchCount: matches.length,
       actionCounts,
+      ratings,
     };
   }, []);
 
@@ -97,6 +115,7 @@ export function useHistoryData(revision = 0): HistoryData & {
       roster: [],
       matchCount: 0,
       actionCounts: new Map(),
+      ratings: new Map(),
     }),
     [],
   );

@@ -57,7 +57,7 @@ function MatchList() {
     setRevision((current) => current + 1);
   }, []);
 
-  const { matches, finished, inProgress, actionCounts, loading } =
+  const { matches, finished, inProgress, actionCounts, ratings, loading } =
     useHistoryData(revision);
 
   return (
@@ -123,6 +123,7 @@ function MatchList() {
                   match={match}
                   href={`/history/?m=${match.id}`}
                   actionCount={actionCounts.get(match.id) ?? 0}
+                  rating={ratings.get(match.id)}
                   onDeleted={onDeleted}
                 />
               ))}

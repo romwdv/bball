@@ -308,6 +308,51 @@ export function teamTotals(
 }
 
 // ---------------------------------------------------------------------------
+// Évaluation
+// ---------------------------------------------------------------------------
+
+/**
+ * Évaluation d'une ligne de statistiques — actions positives moins actions
+ * négatives :
+ *
+ * ```
+ * (points + rebonds + passes décisives + interceptions + contres)
+ *   − (balles perdues + (LF réussis − LF manqués) + (tirs réussis − tirs manqués))
+ * ```
+ *
+ * Les deux derniers termes sont donc la différence entre réussis et manqués :
+ * un joueur qui ne rate jamais ne perd rien sur ce poste, même s'il ne tire pas.
+ *
+ * Prend un `StatDelta` et non un `PlayerStats` : la même règle s'applique à un
+ * joueur, à l'équipe, ou à n'importe quel sous-ensemble d'actions.
+ */
+export function rating(stats: StatDelta): number {
+  // Négatif quand on rate plus qu'on ne réussit : retranché, il devient un
+  // poste négatif. C'est le sens de « réussis moins manqués » dans la formule.
+  const missedShots = stats.fga2 + stats.fga3 - (stats.fgm2 + stats.fgm3);
+  const missedFreeThrows = stats.fta - stats.ftm;
+  return (
+    stats.points +
+    stats.reboundsOffensive +
+    stats.reboundsDefensive +
+    stats.assists +
+    stats.steals +
+    stats.blocks -
+    stats.turnovers -
+    missedFreeThrows -
+    missedShots
+  );
+}
+
+/** Évaluation d'un match : l'évaluation de l'équipe sur ses actions actives. */
+export function matchRating(
+  actions: readonly Action[],
+  matchId: string,
+): number {
+  return rating(teamTotals(actions, { matchId }));
+}
+
+// ---------------------------------------------------------------------------
 // Stats par période
 // ---------------------------------------------------------------------------
 
