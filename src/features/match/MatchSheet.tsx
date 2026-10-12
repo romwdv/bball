@@ -87,15 +87,37 @@ function buildRows(
   const three = percentage(stats.fgm3, stats.fga3);
   const ft = percentage(stats.ftm, stats.fta);
 
+  /**
+   * `réussis/tentés`, sous le pourcentage — comme sur les stats cumulées.
+   *
+   * Un pourcentage seul ne dit pas si 100% vient de 2 tirs ou de 20 ; c'est le
+   * volume qui rend le pourcentage interprétable. Réservé aux trois lignes de
+   * détail : « % Tirs » est déjà un pourcentage sur les deux points de tir, et
+   * lui ajouter `4/6` répéterait ce que %2PTS et %3PTS disent déjà.
+   */
+  const made = (m: number, a: number) => `${m}/${a}`;
+
   return [
     [
       { label: "Points", value: String(stats.points) },
       { label: "% Tirs", value: formatPercentage(fg) },
     ],
     [
-      { label: "% 2PTS", value: formatPercentage(two) },
-      { label: "% 3PTS", value: formatPercentage(three) },
-      { label: "% LF", value: formatPercentage(ft) },
+      {
+        label: "% 2PTS",
+        value: formatPercentage(two),
+        detail: made(stats.fgm2, stats.fga2),
+      },
+      {
+        label: "% 3PTS",
+        value: formatPercentage(three),
+        detail: made(stats.fgm3, stats.fga3),
+      },
+      {
+        label: "% LF",
+        value: formatPercentage(ft),
+        detail: made(stats.ftm, stats.fta),
+      },
     ],
     [
       { label: "PD", value: String(stats.assists) },
