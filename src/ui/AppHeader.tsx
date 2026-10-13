@@ -12,7 +12,7 @@ import { BallIcon } from "@/ui/icons";
 export function AppHeader() {
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-2 bg-base px-(--padding-safe-l) shadow-[0_1px_4px_rgba(0,0,0,0.15)]">
-      <BallIcon className="h-9 w-9 text-accent-strong" />
+      <BallIcon className="ml-4 h-9 w-9 text-accent-strong" />
       <span className="font-brand text-2xl font-normal tracking-wide text-primary">
         BBALL STATS
       </span>
